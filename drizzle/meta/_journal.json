@@ -15,6 +15,13 @@
       "when": 1779985845465,
       "tag": "0001_bitter_sabretooth",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1779985890000,
+      "tag": "0002_client_building_setup",
+      "breakpoints": true
     }
   ]
 }
