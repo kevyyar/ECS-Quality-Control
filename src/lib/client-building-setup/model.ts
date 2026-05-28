@@ -9,6 +9,16 @@ export type BuildingInput = {
   name: string;
 };
 
+export type AreaTypeInput = {
+  name: string;
+};
+
+export type AreaInput = {
+  buildingId: string;
+  areaTypeId: string;
+  name: string;
+};
+
 export type ClientSetupRecord = {
   id: string;
   name: string;
@@ -32,14 +42,51 @@ export type BuildingSetupRecord = {
   isActive: boolean;
 };
 
+export type AreaTypeSetupRecord = {
+  id: string;
+  name: string;
+  archivedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+  isArchived: boolean;
+};
+
+export type AreaSetupRecord = {
+  id: string;
+  buildingId: string;
+  buildingName: string;
+  clientId: string;
+  clientName: string;
+  areaTypeId: string;
+  areaTypeName: string;
+  name: string;
+  archivedAt: Date | null;
+  buildingArchivedAt: Date | null;
+  clientArchivedAt: Date | null;
+  areaTypeArchivedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+  isArchived: boolean;
+  isBuildingArchived: boolean;
+  isClientArchived: boolean;
+  isAreaTypeArchived: boolean;
+  isActive: boolean;
+};
+
 export type ClientField = keyof ClientInput;
 export type BuildingField = keyof BuildingInput;
+export type AreaTypeField = keyof AreaTypeInput;
+export type AreaField = keyof AreaInput;
 
 export type ClientFieldErrors = Partial<Record<ClientField, string>>;
 export type BuildingFieldErrors = Partial<Record<BuildingField, string>>;
+export type AreaTypeFieldErrors = Partial<Record<AreaTypeField, string>>;
+export type AreaFieldErrors = Partial<Record<AreaField, string>>;
 
 export type ClientFormValues = Record<ClientField, string>;
 export type BuildingFormValues = Record<BuildingField, string>;
+export type AreaTypeFormValues = Record<AreaTypeField, string>;
+export type AreaFormValues = Record<AreaField, string>;
 
 export type ClientParseResult =
   | { ok: true; data: ClientInput }
@@ -49,7 +96,19 @@ export type BuildingParseResult =
   | { ok: true; data: BuildingInput }
   | { ok: false; errors: BuildingFieldErrors; values: BuildingFormValues };
 
+export type AreaTypeParseResult =
+  | { ok: true; data: AreaTypeInput }
+  | { ok: false; errors: AreaTypeFieldErrors; values: AreaTypeFormValues };
+
+export type AreaParseResult =
+  | { ok: true; data: AreaInput }
+  | { ok: false; errors: AreaFieldErrors; values: AreaFormValues };
+
 export type BuildingNameParseResult =
+  | { ok: true; name: string }
+  | { ok: false; error: string; value: string };
+
+export type AreaNameParseResult =
   | { ok: true; name: string }
   | { ok: false; error: string; value: string };
 
@@ -101,11 +160,46 @@ function buildingNameError(name: string): string | null {
   return null;
 }
 
+function areaTypeNameError(name: string): string | null {
+  if (name === "") {
+    return "Area Type name is required.";
+  }
+
+  if (name.length > 160) {
+    return "Area Type name must be 160 characters or fewer.";
+  }
+
+  return null;
+}
+
+function areaNameError(name: string): string | null {
+  if (name === "") {
+    return "Area name is required.";
+  }
+
+  if (name.length > 160) {
+    return "Area name must be 160 characters or fewer.";
+  }
+
+  return null;
+}
+
 export function parseBuildingNameFormData(
   formData: FormData,
 ): BuildingNameParseResult {
   const name = trimFormValue(formData, "name");
   const error = buildingNameError(name);
+
+  if (error) {
+    return { ok: false, error, value: name };
+  }
+
+  return { ok: true, name };
+}
+
+export function parseAreaNameFormData(formData: FormData): AreaNameParseResult {
+  const name = trimFormValue(formData, "name");
+  const error = areaNameError(name);
 
   if (error) {
     return { ok: false, error, value: name };
@@ -126,6 +220,53 @@ export function parseBuildingFormData(formData: FormData): BuildingParseResult {
   }
 
   const nameError = buildingNameError(values.name);
+
+  if (nameError) {
+    errors.name = nameError;
+  }
+
+  if (Object.keys(errors).length > 0) {
+    return { ok: false, errors, values };
+  }
+
+  return { ok: true, data: values };
+}
+
+export function parseAreaTypeFormData(formData: FormData): AreaTypeParseResult {
+  const values: AreaTypeFormValues = {
+    name: trimFormValue(formData, "name"),
+  };
+  const errors: AreaTypeFieldErrors = {};
+  const nameError = areaTypeNameError(values.name);
+
+  if (nameError) {
+    errors.name = nameError;
+  }
+
+  if (Object.keys(errors).length > 0) {
+    return { ok: false, errors, values };
+  }
+
+  return { ok: true, data: values };
+}
+
+export function parseAreaFormData(formData: FormData): AreaParseResult {
+  const values: AreaFormValues = {
+    buildingId: trimFormValue(formData, "buildingId"),
+    areaTypeId: trimFormValue(formData, "areaTypeId"),
+    name: trimFormValue(formData, "name"),
+  };
+  const errors: AreaFieldErrors = {};
+
+  if (!isSetupRecordId(values.buildingId)) {
+    errors.buildingId = "Select an active Building.";
+  }
+
+  if (!isSetupRecordId(values.areaTypeId)) {
+    errors.areaTypeId = "Select an active Area Type.";
+  }
+
+  const nameError = areaNameError(values.name);
 
   if (nameError) {
     errors.name = nameError;

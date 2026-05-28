@@ -35,16 +35,29 @@ vi.mock("server-only", () => ({}));
 vi.mock("@/db/client", () => ({ db }));
 
 const {
+  ActiveAreaParentsRequiredError,
+  archiveArea,
+  archiveAreaType,
   archiveBuilding,
   archiveClient,
+  createArea,
+  createAreaType,
   createBuilding,
   createClient,
+  getArea,
+  getAreaType,
   getBuilding,
   getClient,
+  listAreaTypes,
+  listAreas,
   listBuildings,
   listClients,
+  restoreArea,
+  restoreAreaType,
   restoreBuilding,
   restoreClient,
+  updateArea,
+  updateAreaType,
   updateBuilding,
   updateClient,
 } = await import("./repository");
@@ -95,6 +108,79 @@ const buildingUnderArchivedClientRow = {
   },
 };
 
+const activeAreaTypeRow = {
+  id: "55555555-5555-4555-8555-555555555555",
+  name: "Restroom",
+  archivedAt: null,
+  createdAt,
+  updatedAt,
+};
+
+const archivedAreaTypeRow = {
+  ...activeAreaTypeRow,
+  id: "66666666-6666-4666-8666-666666666666",
+  name: "Archived Area Type",
+  archivedAt,
+};
+
+const activeAreaRow = {
+  area: {
+    id: "77777777-7777-4777-8777-777777777777",
+    buildingId: activeBuildingRow.building.id,
+    areaTypeId: activeAreaTypeRow.id,
+    name: "First Floor Restroom",
+    archivedAt: null,
+    createdAt,
+    updatedAt,
+  },
+  building: {
+    id: activeBuildingRow.building.id,
+    name: activeBuildingRow.building.name,
+    archivedAt: null,
+  },
+  client: {
+    id: activeClientRow.id,
+    name: activeClientRow.name,
+    archivedAt: null,
+  },
+  areaType: {
+    name: activeAreaTypeRow.name,
+    archivedAt: null,
+  },
+};
+
+const areaUnderArchivedClientRow = {
+  ...activeAreaRow,
+  area: {
+    ...activeAreaRow.area,
+    id: "88888888-8888-4888-8888-888888888888",
+    buildingId: buildingUnderArchivedClientRow.building.id,
+  },
+  building: {
+    id: buildingUnderArchivedClientRow.building.id,
+    name: buildingUnderArchivedClientRow.building.name,
+    archivedAt: null,
+  },
+  client: {
+    id: archivedClientRow.id,
+    name: archivedClientRow.name,
+    archivedAt,
+  },
+};
+
+const areaWithArchivedAreaTypeRow = {
+  ...activeAreaRow,
+  area: {
+    ...activeAreaRow.area,
+    id: "99999999-9999-4999-8999-999999999999",
+    areaTypeId: archivedAreaTypeRow.id,
+  },
+  areaType: {
+    name: archivedAreaTypeRow.name,
+    archivedAt,
+  },
+};
+
 describe("Client and Building setup repository", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -106,6 +192,7 @@ describe("Client and Building setup repository", () => {
       limit: vi.fn(),
     });
     selectInnerJoin.mockReturnValue({
+      innerJoin: selectInnerJoin,
       where: selectWhere,
       orderBy: selectOrderBy,
     });
@@ -320,6 +407,281 @@ describe("Client and Building setup repository", () => {
     ).rejects.toMatchObject({
       name: "SetupRecordNotFoundError",
       message: "Building setup record was not found.",
+    });
+  });
+
+  it("returns null for malformed Area Type and Area ids", async () => {
+    await expect(getAreaType("not-a-uuid")).resolves.toBeNull();
+    await expect(getArea("not-a-uuid")).resolves.toBeNull();
+
+    expect(db.select).not.toHaveBeenCalled();
+  });
+
+  it("creates Area Types with normalized setup input", async () => {
+    insertReturning.mockResolvedValueOnce([activeAreaTypeRow]);
+
+    await expect(createAreaType({ name: "Restroom" })).resolves.toEqual({
+      ...activeAreaTypeRow,
+      isArchived: false,
+    });
+
+    expect(insertValues).toHaveBeenCalledWith({ name: "Restroom" });
+  });
+
+  it("lists active Area Types without returning archived Area Types", async () => {
+    selectOrderBy.mockResolvedValueOnce([activeAreaTypeRow]);
+
+    await expect(listAreaTypes()).resolves.toEqual([
+      { ...activeAreaTypeRow, isArchived: false },
+    ]);
+
+    expect(selectWhere).toHaveBeenCalledTimes(1);
+  });
+
+  it("can list historical Area Types including archived records", async () => {
+    selectOrderBy.mockResolvedValueOnce([activeAreaTypeRow, archivedAreaTypeRow]);
+
+    await expect(listAreaTypes({ visibility: "historical" })).resolves.toEqual([
+      { ...activeAreaTypeRow, isArchived: false },
+      { ...archivedAreaTypeRow, isArchived: true },
+    ]);
+
+    expect(selectWhere).not.toHaveBeenCalled();
+  });
+
+  it("archives and restores Area Types without deleting records", async () => {
+    updateReturning
+      .mockResolvedValueOnce([archivedAreaTypeRow])
+      .mockResolvedValueOnce([activeAreaTypeRow]);
+
+    await expect(archiveAreaType(activeAreaTypeRow.id)).resolves.toEqual({
+      ...archivedAreaTypeRow,
+      isArchived: true,
+    });
+    await expect(restoreAreaType(activeAreaTypeRow.id)).resolves.toEqual({
+      ...activeAreaTypeRow,
+      isArchived: false,
+    });
+
+    expect(db).not.toHaveProperty("delete");
+  });
+
+  it("throws a not-found error when an Area Type mutation matches no rows", async () => {
+    updateReturning.mockResolvedValueOnce([]);
+
+    await expect(
+      updateAreaType(activeAreaTypeRow.id, { name: "Renamed Area Type" }),
+    ).rejects.toMatchObject({
+      name: "SetupRecordNotFoundError",
+      message: "Area Type setup record was not found.",
+    });
+  });
+
+  it("requires active Building, Client, and Area Type parents before creating an Area", async () => {
+    const buildingLimit = vi.fn().mockResolvedValueOnce([{
+      building: activeBuildingRow.building,
+      client: { archivedAt: null },
+    }]);
+    const areaTypeLimit = vi.fn().mockResolvedValueOnce([activeAreaTypeRow]);
+    selectWhere
+      .mockReturnValueOnce({ for: vi.fn(() => ({ limit: buildingLimit })) })
+      .mockReturnValueOnce({ for: vi.fn(() => ({ limit: areaTypeLimit })) });
+    insertReturning.mockResolvedValueOnce([activeAreaRow.area]);
+    selectOrderBy.mockResolvedValueOnce([activeAreaRow]);
+
+    await expect(
+      createArea({
+        buildingId: activeBuildingRow.building.id,
+        areaTypeId: activeAreaTypeRow.id,
+        name: "First Floor Restroom",
+      }),
+    ).resolves.toEqual({
+      ...activeAreaRow.area,
+      buildingName: activeBuildingRow.building.name,
+      clientId: activeClientRow.id,
+      clientName: activeClientRow.name,
+      areaTypeName: activeAreaTypeRow.name,
+      buildingArchivedAt: null,
+      clientArchivedAt: null,
+      areaTypeArchivedAt: null,
+      isArchived: false,
+      isBuildingArchived: false,
+      isClientArchived: false,
+      isAreaTypeArchived: false,
+      isActive: true,
+    });
+
+    expect(insertValues).toHaveBeenCalledWith({
+      buildingId: activeBuildingRow.building.id,
+      areaTypeId: activeAreaTypeRow.id,
+      name: "First Floor Restroom",
+    });
+  });
+
+  it("rejects Area creation under an archived Building", async () => {
+    const buildingLimit = vi.fn().mockResolvedValueOnce([{
+      building: { ...activeBuildingRow.building, archivedAt },
+      client: { archivedAt: null },
+    }]);
+    const areaTypeLimit = vi.fn().mockResolvedValueOnce([activeAreaTypeRow]);
+    selectWhere
+      .mockReturnValueOnce({ for: vi.fn(() => ({ limit: buildingLimit })) })
+      .mockReturnValueOnce({ for: vi.fn(() => ({ limit: areaTypeLimit })) });
+
+    const result = createArea({
+      buildingId: activeBuildingRow.building.id,
+      areaTypeId: activeAreaTypeRow.id,
+      name: "First Floor Restroom",
+    });
+
+    await expect(result).rejects.toBeInstanceOf(ActiveAreaParentsRequiredError);
+    await expect(result).rejects.toMatchObject({
+      fields: ["buildingId"],
+    });
+
+    expect(insertValues).not.toHaveBeenCalled();
+  });
+
+  it("rejects Area creation under an archived Client", async () => {
+    const buildingLimit = vi.fn().mockResolvedValueOnce([{
+      building: activeBuildingRow.building,
+      client: { archivedAt },
+    }]);
+    const areaTypeLimit = vi.fn().mockResolvedValueOnce([activeAreaTypeRow]);
+    selectWhere
+      .mockReturnValueOnce({ for: vi.fn(() => ({ limit: buildingLimit })) })
+      .mockReturnValueOnce({ for: vi.fn(() => ({ limit: areaTypeLimit })) });
+
+    await expect(
+      createArea({
+        buildingId: activeBuildingRow.building.id,
+        areaTypeId: activeAreaTypeRow.id,
+        name: "First Floor Restroom",
+      }),
+    ).rejects.toMatchObject({
+      name: "ActiveAreaParentsRequiredError",
+      fields: ["buildingId"],
+    });
+
+    expect(insertValues).not.toHaveBeenCalled();
+  });
+
+  it("rejects Area creation with an archived Area Type", async () => {
+    const buildingLimit = vi.fn().mockResolvedValueOnce([{
+      building: activeBuildingRow.building,
+      client: { archivedAt: null },
+    }]);
+    const areaTypeLimit = vi.fn().mockResolvedValueOnce([archivedAreaTypeRow]);
+    selectWhere
+      .mockReturnValueOnce({ for: vi.fn(() => ({ limit: buildingLimit })) })
+      .mockReturnValueOnce({ for: vi.fn(() => ({ limit: areaTypeLimit })) });
+
+    await expect(
+      createArea({
+        buildingId: activeBuildingRow.building.id,
+        areaTypeId: archivedAreaTypeRow.id,
+        name: "First Floor Restroom",
+      }),
+    ).rejects.toMatchObject({
+      name: "ActiveAreaParentsRequiredError",
+      fields: ["areaTypeId"],
+    });
+
+    expect(insertValues).not.toHaveBeenCalled();
+  });
+
+  it("lists active Areas only when Area and all parents are active", async () => {
+    selectOrderBy.mockResolvedValueOnce([activeAreaRow]);
+
+    await expect(listAreas()).resolves.toEqual([
+      {
+        ...activeAreaRow.area,
+        buildingName: activeBuildingRow.building.name,
+        clientId: activeClientRow.id,
+        clientName: activeClientRow.name,
+        areaTypeName: activeAreaTypeRow.name,
+        buildingArchivedAt: null,
+        clientArchivedAt: null,
+        areaTypeArchivedAt: null,
+        isArchived: false,
+        isBuildingArchived: false,
+        isClientArchived: false,
+        isAreaTypeArchived: false,
+        isActive: true,
+      },
+    ]);
+
+    expect(selectWhere).toHaveBeenCalledTimes(1);
+  });
+
+  it("can list historical Areas under archived Clients or Area Types", async () => {
+    selectOrderBy.mockResolvedValueOnce([
+      activeAreaRow,
+      areaUnderArchivedClientRow,
+      areaWithArchivedAreaTypeRow,
+    ]);
+
+    await expect(listAreas({ visibility: "historical" })).resolves.toEqual([
+      expect.objectContaining({
+        id: activeAreaRow.area.id,
+        isActive: true,
+      }),
+      expect.objectContaining({
+        id: areaUnderArchivedClientRow.area.id,
+        isClientArchived: true,
+        isActive: false,
+      }),
+      expect.objectContaining({
+        id: areaWithArchivedAreaTypeRow.area.id,
+        isAreaTypeArchived: true,
+        isActive: false,
+      }),
+    ]);
+  });
+
+  it("restores an Area without making it active while a parent is archived", async () => {
+    updateReturning.mockResolvedValueOnce([areaUnderArchivedClientRow.area]);
+    selectOrderBy.mockResolvedValueOnce([areaUnderArchivedClientRow]);
+
+    await expect(restoreArea(areaUnderArchivedClientRow.area.id)).resolves.toEqual(
+      expect.objectContaining({
+        id: areaUnderArchivedClientRow.area.id,
+        isArchived: false,
+        isClientArchived: true,
+        isActive: false,
+      }),
+    );
+  });
+
+  it("archives Areas instead of deleting them", async () => {
+    const archivedAreaRow = {
+      ...activeAreaRow.area,
+      archivedAt,
+    };
+    updateReturning.mockResolvedValueOnce([archivedAreaRow]);
+    selectOrderBy.mockResolvedValueOnce([
+      { ...activeAreaRow, area: archivedAreaRow },
+    ]);
+
+    await expect(archiveArea(activeAreaRow.area.id)).resolves.toEqual(
+      expect.objectContaining({
+        id: activeAreaRow.area.id,
+        isArchived: true,
+        isActive: false,
+      }),
+    );
+
+    expect(db).not.toHaveProperty("delete");
+  });
+
+  it("throws a not-found error when an Area mutation matches no rows", async () => {
+    updateReturning.mockResolvedValueOnce([]);
+
+    await expect(
+      updateArea(activeAreaRow.area.id, { name: "Renamed Area" }),
+    ).rejects.toMatchObject({
+      name: "SetupRecordNotFoundError",
+      message: "Area setup record was not found.",
     });
   });
 });

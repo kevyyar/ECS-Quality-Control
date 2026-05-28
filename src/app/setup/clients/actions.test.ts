@@ -122,6 +122,7 @@ describe("Client setup actions", () => {
     expect(revalidatePath).toHaveBeenCalledWith("/setup/clients");
     expect(revalidatePath).toHaveBeenCalledWith("/setup/clients/11111111-1111-4111-8111-111111111111");
     expect(revalidatePath).toHaveBeenCalledWith("/setup/buildings");
+    expect(revalidatePath).toHaveBeenCalledWith("/setup/areas");
   });
 
   it("updates Clients by id and revalidates their detail page", async () => {
@@ -139,6 +140,7 @@ describe("Client setup actions", () => {
       name: "Renamed Client",
     });
     expect(revalidatePath).toHaveBeenCalledWith(`/setup/clients/${clientRecord.id}`);
+    expect(revalidatePath).toHaveBeenCalledWith("/setup/areas");
   });
 
   it("returns an error state when the Client no longer exists during update", async () => {
@@ -165,6 +167,7 @@ describe("Client setup actions", () => {
     expect(archiveClient).toHaveBeenCalledWith(clientRecord.id);
     expect(restoreClient).toHaveBeenCalledWith(clientRecord.id);
     expect(revalidatePath).toHaveBeenCalledWith(`/setup/clients/${clientRecord.id}`);
+    expect(revalidatePath).toHaveBeenCalledWith("/setup/areas");
   });
 
   it("ignores stale Client archive requests", async () => {

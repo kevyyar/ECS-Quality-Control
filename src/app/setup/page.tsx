@@ -40,6 +40,26 @@ export default async function SetupPage() {
 
           <Link
             className="block rounded-2xl border border-brand-100 bg-brand-50/70 p-5 text-brand-700 transition hover:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100"
+            href="/setup/area-types"
+          >
+            <span className="block text-lg font-semibold">Area Types</span>
+            <span className="mt-2 block text-sm">
+              Manage reusable Area categories used to organize Areas.
+            </span>
+          </Link>
+
+          <Link
+            className="block rounded-2xl border border-brand-100 bg-brand-50/70 p-5 text-brand-700 transition hover:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100"
+            href="/setup/areas"
+          >
+            <span className="block text-lg font-semibold">Areas</span>
+            <span className="mt-2 block text-sm">
+              Manage inspectable spaces under active Buildings.
+            </span>
+          </Link>
+
+          <Link
+            className="block rounded-2xl border border-brand-100 bg-brand-50/70 p-5 text-brand-700 transition hover:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100"
             href="/company-branding"
           >
             <span className="block text-lg font-semibold">Company Branding</span>

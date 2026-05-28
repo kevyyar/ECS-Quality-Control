@@ -3,15 +3,15 @@ import { notFound } from "next/navigation";
 
 import { requireProtectedAction } from "@/lib/auth/session";
 import {
-  getBuilding,
+  getAreaType,
   listAreas,
 } from "@/lib/client-building-setup/repository";
 
-import { archiveBuildingAction, restoreBuildingAction } from "../actions";
-import { BuildingEditForm } from "../building-form";
+import { archiveAreaTypeAction, restoreAreaTypeAction } from "../actions";
+import { AreaTypeEditForm } from "../area-type-form";
 
-type BuildingDetailPageProps = {
-  params: Promise<{ buildingId: string }>;
+type AreaTypeDetailPageProps = {
+  params: Promise<{ areaTypeId: string }>;
 };
 
 function areaStatus(area: Awaited<ReturnType<typeof listAreas>>[number]): string {
@@ -34,75 +34,47 @@ function areaStatus(area: Awaited<ReturnType<typeof listAreas>>[number]): string
   return "Active";
 }
 
-function statusLabel(building: NonNullable<Awaited<ReturnType<typeof getBuilding>>>): string {
-  if (building.isArchived) {
-    return "Archived";
-  }
-
-  if (building.isParentArchived) {
-    return "Restored but inactive while parent Client is archived";
-  }
-
-  return "Active";
-}
-
-export default async function BuildingDetailPage({ params }: BuildingDetailPageProps) {
+export default async function AreaTypeDetailPage({ params }: AreaTypeDetailPageProps) {
   await requireProtectedAction("manageSetup");
 
-  const { buildingId } = await params;
-  const building = await getBuilding(buildingId);
+  const { areaTypeId } = await params;
+  const areaType = await getAreaType(areaTypeId);
 
-  if (!building) {
+  if (!areaType) {
     notFound();
   }
 
   const areas = await listAreas({
     visibility: "historical",
-    buildingId: building.id,
+    areaTypeId: areaType.id,
   });
 
   return (
     <main className="min-h-screen bg-slate-50 px-6 py-10 text-ink sm:px-10">
       <section className="mx-auto max-w-4xl space-y-8 rounded-card border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
         <div className="space-y-3">
-          <Link className="text-sm font-semibold text-brand-700" href="/setup/buildings">
-            ← Buildings
+          <Link className="text-sm font-semibold text-brand-700" href="/setup/area-types">
+            ← Area Types
           </Link>
           <div className="space-y-2">
             <p className="text-sm font-semibold uppercase tracking-[0.24em] text-brand-700">
-              {statusLabel(building)}
+              {areaType.isArchived ? "Archived Area Type" : "Active Area Type"}
             </p>
             <h1 className="text-3xl font-bold tracking-tight text-slate-950">
-              {building.name}
+              {areaType.name}
             </h1>
-            <p className="text-muted-ink">
-              Client: {" "}
-              <Link
-                className="font-semibold text-brand-700"
-                href={`/setup/clients/${building.clientId}`}
-              >
-                {building.clientName}
-              </Link>
-            </p>
           </div>
         </div>
 
-        {building.isParentArchived && !building.isArchived ? (
-          <p className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">
-            This Building is restored, but it remains inactive for new workflows
-            until its parent Client is restored.
-          </p>
-        ) : null}
+        <AreaTypeEditForm areaType={areaType} />
 
-        <BuildingEditForm building={building} />
-
-        <form action={building.isArchived ? restoreBuildingAction : archiveBuildingAction}>
-          <input name="id" type="hidden" value={building.id} />
+        <form action={areaType.isArchived ? restoreAreaTypeAction : archiveAreaTypeAction}>
+          <input name="id" type="hidden" value={areaType.id} />
           <button
             className="rounded-xl border border-slate-300 px-5 py-3 text-sm font-semibold text-slate-900 shadow-sm hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-brand-100"
             type="submit"
           >
-            {building.isArchived ? "Restore Building" : "Archive Building"}
+            {areaType.isArchived ? "Restore Area Type" : "Archive Area Type"}
           </button>
         </form>
 
@@ -116,7 +88,7 @@ export default async function BuildingDetailPage({ params }: BuildingDetailPageP
 
           {areas.length === 0 ? (
             <p className="rounded-2xl border border-slate-200 p-5 text-sm text-muted-ink">
-              No Areas have been set up for this Building.
+              No Areas use this Area Type.
             </p>
           ) : (
             <ul className="divide-y divide-slate-200 rounded-2xl border border-slate-200">
@@ -131,7 +103,7 @@ export default async function BuildingDetailPage({ params }: BuildingDetailPageP
                         {area.name}
                       </span>
                       <span className="mt-1 block text-sm text-muted-ink">
-                        {area.areaTypeName} · {areaStatus(area)}
+                        {area.clientName} · {area.buildingName} · {areaStatus(area)}
                       </span>
                     </span>
                     <span className="text-sm font-semibold text-brand-700">View</span>

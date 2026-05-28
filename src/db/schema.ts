@@ -83,6 +83,50 @@ export const buildings = pgTable(
   ],
 ).enableRLS();
 
+export const areaTypes = pgTable(
+  "area_types",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    name: varchar("name", { length: 160 }).notNull(),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    check("area_types_name_not_blank", sql`length(btrim(${table.name})) > 0`),
+  ],
+).enableRLS();
+
+export const areas = pgTable(
+  "areas",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    buildingId: uuid("building_id")
+      .notNull()
+      .references(() => buildings.id, { onDelete: "restrict" }),
+    areaTypeId: uuid("area_type_id")
+      .notNull()
+      .references(() => areaTypes.id, { onDelete: "restrict" }),
+    name: varchar("name", { length: 160 }).notNull(),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("areas_building_id_idx").on(table.buildingId),
+    index("areas_area_type_id_idx").on(table.areaTypeId),
+    check("areas_name_not_blank", sql`length(btrim(${table.name})) > 0`),
+  ],
+).enableRLS();
+
 export const internalUsers = pgTable(
   "internal_users",
   {
