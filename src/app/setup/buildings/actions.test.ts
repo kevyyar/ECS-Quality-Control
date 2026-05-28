@@ -162,6 +162,7 @@ describe("Building setup actions", () => {
       name: "North Tower",
     });
     expect(revalidatePath).toHaveBeenCalledWith("/setup/buildings");
+    expect(revalidatePath).toHaveBeenCalledWith("/setup/areas");
     expect(revalidatePath).toHaveBeenCalledWith(`/setup/buildings/${buildingRecord.id}`);
     expect(revalidatePath).toHaveBeenCalledWith(`/setup/clients/${buildingRecord.clientId}`);
   });
@@ -181,6 +182,7 @@ describe("Building setup actions", () => {
       name: "Renamed Building",
     });
     expect(revalidatePath).toHaveBeenCalledWith(`/setup/buildings/${buildingRecord.id}`);
+    expect(revalidatePath).toHaveBeenCalledWith("/setup/areas");
   });
 
   it("returns an error state when the Building no longer exists during update", async () => {
@@ -207,6 +209,7 @@ describe("Building setup actions", () => {
     expect(archiveBuilding).toHaveBeenCalledWith(buildingRecord.id);
     expect(restoreBuilding).toHaveBeenCalledWith(buildingRecord.id);
     expect(revalidatePath).toHaveBeenCalledWith(`/setup/buildings/${buildingRecord.id}`);
+    expect(revalidatePath).toHaveBeenCalledWith("/setup/areas");
   });
 
   it("ignores stale Building archive requests", async () => {

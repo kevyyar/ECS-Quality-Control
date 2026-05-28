@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   isSetupRecordId,
+  parseAreaNameFormData,
+  parseAreaFormData,
+  parseAreaTypeFormData,
   parseBuildingNameFormData,
   parseBuildingFormData,
   parseClientFormData,
@@ -97,6 +100,128 @@ describe("parseBuildingFormData", () => {
       ok: false,
       errors: { name: "Building name must be 160 characters or fewer." },
       values: { clientId: "11111111-1111-4111-8111-111111111111", name },
+    });
+  });
+});
+
+describe("parseAreaTypeFormData", () => {
+  it("normalizes a valid Area Type name", () => {
+    expect(parseAreaTypeFormData(formData({ name: "  Restroom  " }))).toEqual({
+      ok: true,
+      data: { name: "Restroom" },
+    });
+  });
+
+  it("rejects missing Area Type names", () => {
+    expect(parseAreaTypeFormData(formData({ name: " " }))).toEqual({
+      ok: false,
+      errors: { name: "Area Type name is required." },
+      values: { name: "" },
+    });
+  });
+
+  it("rejects Area Type names over 160 characters", () => {
+    const name = "a".repeat(161);
+
+    expect(parseAreaTypeFormData(formData({ name }))).toEqual({
+      ok: false,
+      errors: { name: "Area Type name must be 160 characters or fewer." },
+      values: { name },
+    });
+  });
+});
+
+describe("parseAreaFormData", () => {
+  it("normalizes valid Area setup input", () => {
+    expect(
+      parseAreaFormData(
+        formData({
+          buildingId: "33333333-3333-4333-8333-333333333333",
+          areaTypeId: "55555555-5555-4555-8555-555555555555",
+          name: "  First Floor Restroom  ",
+        }),
+      ),
+    ).toEqual({
+      ok: true,
+      data: {
+        buildingId: "33333333-3333-4333-8333-333333333333",
+        areaTypeId: "55555555-5555-4555-8555-555555555555",
+        name: "First Floor Restroom",
+      },
+    });
+  });
+
+  it("rejects invalid Area parent Building and Area Type ids", () => {
+    expect(
+      parseAreaFormData(
+        formData({ buildingId: "not-a-building", areaTypeId: "not-a-type", name: "Lobby" }),
+      ),
+    ).toEqual({
+      ok: false,
+      errors: {
+        buildingId: "Select an active Building.",
+        areaTypeId: "Select an active Area Type.",
+      },
+      values: { buildingId: "not-a-building", areaTypeId: "not-a-type", name: "Lobby" },
+    });
+  });
+
+  it("rejects missing Area names", () => {
+    expect(
+      parseAreaFormData(
+        formData({
+          buildingId: "33333333-3333-4333-8333-333333333333",
+          areaTypeId: "55555555-5555-4555-8555-555555555555",
+          name: " ",
+        }),
+      ),
+    ).toEqual({
+      ok: false,
+      errors: { name: "Area name is required." },
+      values: {
+        buildingId: "33333333-3333-4333-8333-333333333333",
+        areaTypeId: "55555555-5555-4555-8555-555555555555",
+        name: "",
+      },
+    });
+  });
+
+  it("rejects Area names over 160 characters", () => {
+    const name = "a".repeat(161);
+
+    expect(
+      parseAreaFormData(
+        formData({
+          buildingId: "33333333-3333-4333-8333-333333333333",
+          areaTypeId: "55555555-5555-4555-8555-555555555555",
+          name,
+        }),
+      ),
+    ).toEqual({
+      ok: false,
+      errors: { name: "Area name must be 160 characters or fewer." },
+      values: {
+        buildingId: "33333333-3333-4333-8333-333333333333",
+        areaTypeId: "55555555-5555-4555-8555-555555555555",
+        name,
+      },
+    });
+  });
+});
+
+describe("parseAreaNameFormData", () => {
+  it("normalizes a valid Area name", () => {
+    expect(parseAreaNameFormData(formData({ name: "  First Floor Restroom  " }))).toEqual({
+      ok: true,
+      name: "First Floor Restroom",
+    });
+  });
+
+  it("rejects invalid Area names", () => {
+    expect(parseAreaNameFormData(formData({ name: " " }))).toEqual({
+      ok: false,
+      error: "Area name is required.",
+      value: "",
     });
   });
 });

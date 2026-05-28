@@ -30,6 +30,7 @@ function revalidateClientSetupViews(clientId?: string): void {
   revalidatePath("/setup");
   revalidatePath("/setup/clients");
   revalidatePath("/setup/buildings");
+  revalidatePath("/setup/areas");
 
   if (clientId) {
     revalidatePath(`/setup/clients/${clientId}`);

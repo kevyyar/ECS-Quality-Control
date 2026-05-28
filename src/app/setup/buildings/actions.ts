@@ -30,6 +30,7 @@ export type BuildingSetupActionState =
 function revalidateBuildingSetupViews(buildingId?: string, clientId?: string): void {
   revalidatePath("/setup");
   revalidatePath("/setup/buildings");
+  revalidatePath("/setup/areas");
 
   if (buildingId) {
     revalidatePath(`/setup/buildings/${buildingId}`);
