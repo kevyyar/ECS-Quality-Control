@@ -19,7 +19,7 @@ Product scope and vocabulary live in [`CONTEXT.md`](./CONTEXT.md), [`MVP-SPEC.md
 
 - Node.js 22 or newer
 - pnpm 11.x via Corepack or a local pnpm install
-- A local or hosted Supabase project for database-backed work
+- Supabase CLI and Docker for local database-backed work
 
 Enable pnpm with Corepack if needed:
 
@@ -42,15 +42,36 @@ corepack use pnpm@11.1.2
    cp .env.example .env.local
    ```
 
-3. Replace the placeholder values in `.env.local` with values from your local Supabase project.
+3. Start the local Supabase stack:
 
-4. Start the development server:
+   ```bash
+   pnpm supabase:start
+   ```
+
+   The local Supabase stack uses project-specific `563xx` ports so it can run alongside other Supabase projects.
+
+4. Replace the placeholder Supabase keys in `.env.local` with values from:
+
+   ```bash
+   pnpm supabase:status
+   ```
+
+   Use the local `Publishable` value for `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+   Keep the local `Secret` value server-only.
+
+5. Apply database migrations to the local Supabase database:
+
+   ```bash
+   pnpm db:migrate
+   ```
+
+6. Start the development server:
 
    ```bash
    pnpm dev
    ```
 
-5. Open [http://localhost:3000](http://localhost:3000).
+7. Open [http://localhost:3000](http://localhost:3000).
 
 ## Environment variables
 
@@ -76,6 +97,9 @@ Only variables prefixed with `NEXT_PUBLIC_` may be read by browser code.
 | `pnpm test` | Run Vitest unit tests. |
 | `pnpm test:watch` | Run Vitest in watch mode. |
 | `pnpm test:e2e` | Run Playwright end-to-end tests. |
+| `pnpm supabase:start` | Start the local Supabase stack. |
+| `pnpm supabase:status` | Print local Supabase URLs and keys. |
+| `pnpm supabase:stop` | Stop the local Supabase stack. |
 | `pnpm db:generate` | Generate Drizzle migrations from schema changes. |
 | `pnpm db:migrate` | Apply Drizzle migrations using `DATABASE_URL`. |
 | `pnpm db:studio` | Open Drizzle Studio for the configured database. |
