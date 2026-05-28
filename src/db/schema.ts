@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import {
   boolean,
   check,
+  index,
   pgTable,
   timestamp,
   uuid,
@@ -39,6 +40,46 @@ export const companyBranding = pgTable(
       "company_branding_primary_color_hex",
       sql`${table.primaryBrandColor} ~ '^#[0-9A-Fa-f]{6}$'`,
     ),
+  ],
+).enableRLS();
+
+export const clients = pgTable(
+  "clients",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    name: varchar("name", { length: 160 }).notNull(),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    check("clients_name_not_blank", sql`length(btrim(${table.name})) > 0`),
+  ],
+).enableRLS();
+
+export const buildings = pgTable(
+  "buildings",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    clientId: uuid("client_id")
+      .notNull()
+      .references(() => clients.id, { onDelete: "restrict" }),
+    name: varchar("name", { length: 160 }).notNull(),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("buildings_client_id_idx").on(table.clientId),
+    check("buildings_name_not_blank", sql`length(btrim(${table.name})) > 0`),
   ],
 ).enableRLS();
 

@@ -14,6 +14,10 @@ test("internal users can reach the login form", async ({ page }) => {
 for (const path of [
   "/dashboard",
   "/setup",
+  "/setup/clients",
+  "/setup/clients/11111111-1111-4111-8111-111111111111",
+  "/setup/buildings",
+  "/setup/buildings/33333333-3333-4333-8333-333333333333",
   "/internal-users",
   "/company-branding",
   "/inspections/drafts",
