@@ -1,5 +1,46 @@
 import { sql } from "drizzle-orm";
-import { boolean, check, pgTable, timestamp, uuid, varchar } from "drizzle-orm/pg-core";
+import {
+  boolean,
+  check,
+  pgTable,
+  timestamp,
+  uuid,
+  varchar,
+} from "drizzle-orm/pg-core";
+
+import { COMPANY_BRANDING_SINGLETON_KEY } from "@/lib/company-branding/constants";
+
+export const companyBranding = pgTable(
+  "company_branding",
+  {
+    singletonKey: varchar("singleton_key", { length: 32 })
+      .default(COMPANY_BRANDING_SINGLETON_KEY)
+      .primaryKey(),
+    displayName: varchar("display_name", { length: 160 }).notNull(),
+    logoUrl: varchar("logo_url", { length: 2048 }),
+    primaryBrandColor: varchar("primary_brand_color", { length: 7 }).notNull(),
+    contactPhone: varchar("contact_phone", { length: 40 }),
+    contactEmail: varchar("contact_email", { length: 320 }),
+    contactWebsite: varchar("contact_website", { length: 2048 }),
+    contactAddress: varchar("contact_address", { length: 1000 }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    check(
+      "company_branding_singleton_key",
+      sql`${table.singletonKey} = 'company_branding'`,
+    ),
+    check(
+      "company_branding_primary_color_hex",
+      sql`${table.primaryBrandColor} ~ '^#[0-9A-Fa-f]{6}$'`,
+    ),
+  ],
+).enableRLS();
 
 export const internalUsers = pgTable(
   "internal_users",
