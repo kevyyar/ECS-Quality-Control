@@ -1,0 +1,27 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: Arial, Helvetica, sans-serif;
+  --color-brand-50: oklch(0.98 0.02 160);
+  --color-brand-100: oklch(0.94 0.05 160);
+  --color-brand-600: oklch(0.47 0.13 160);
+  --color-brand-700: oklch(0.39 0.12 160);
+  --color-ink: oklch(0.2 0.02 250);
+  --color-muted-ink: oklch(0.48 0.03 250);
+  --radius-card: 1.25rem;
+}
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  margin: 0;
+  background: #f8fafc;
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+}
+
+* {
+  box-sizing: border-box;
+}
