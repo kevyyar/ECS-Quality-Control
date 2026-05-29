@@ -3,6 +3,7 @@ import {
   boolean,
   check,
   index,
+  integer,
   pgTable,
   timestamp,
   uuid,
@@ -124,6 +125,85 @@ export const areas = pgTable(
     index("areas_building_id_idx").on(table.buildingId),
     index("areas_area_type_id_idx").on(table.areaTypeId),
     check("areas_name_not_blank", sql`length(btrim(${table.name})) > 0`),
+  ],
+).enableRLS();
+
+export const inspectionTemplates = pgTable(
+  "inspection_templates",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    name: varchar("name", { length: 160 }).notNull(),
+    description: varchar("description", { length: 1000 }),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    check(
+      "inspection_templates_name_not_blank",
+      sql`length(btrim(${table.name})) > 0`,
+    ),
+  ],
+).enableRLS();
+
+export const inspectionTemplateSections = pgTable(
+  "inspection_template_sections",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    templateId: uuid("template_id")
+      .notNull()
+      .references(() => inspectionTemplates.id, { onDelete: "restrict" }),
+    position: integer("position").notNull(),
+    name: varchar("name", { length: 160 }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("inspection_template_sections_template_id_idx").on(table.templateId),
+    check(
+      "inspection_template_sections_name_not_blank",
+      sql`length(btrim(${table.name})) > 0`,
+    ),
+    check("inspection_template_sections_position_positive", sql`${table.position} > 0`),
+  ],
+).enableRLS();
+
+export const inspectionTemplateItems = pgTable(
+  "inspection_template_items",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    templateId: uuid("template_id")
+      .notNull()
+      .references(() => inspectionTemplates.id, { onDelete: "restrict" }),
+    sectionId: uuid("section_id").references(() => inspectionTemplateSections.id, {
+      onDelete: "restrict",
+    }),
+    position: integer("position").notNull(),
+    name: varchar("name", { length: 160 }).notNull(),
+    description: varchar("description", { length: 1000 }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("inspection_template_items_template_id_idx").on(table.templateId),
+    index("inspection_template_items_section_id_idx").on(table.sectionId),
+    check(
+      "inspection_template_items_name_not_blank",
+      sql`length(btrim(${table.name})) > 0`,
+    ),
+    check("inspection_template_items_position_positive", sql`${table.position} > 0`),
   ],
 ).enableRLS();
 

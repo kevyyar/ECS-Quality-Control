@@ -29,6 +29,13 @@
       "when": 1779991722000,
       "tag": "0003_area_setup",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1779994800000,
+      "tag": "0004_inspection_templates",
+      "breakpoints": true
     }
   ]
 }

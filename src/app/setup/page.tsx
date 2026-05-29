@@ -60,6 +60,16 @@ export default async function SetupPage() {
 
           <Link
             className="block rounded-2xl border border-brand-100 bg-brand-50/70 p-5 text-brand-700 transition hover:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100"
+            href="/setup/inspection-templates"
+          >
+            <span className="block text-lg font-semibold">Inspection Templates</span>
+            <span className="mt-2 block text-sm">
+              Manage reusable inspection checklists and starter templates.
+            </span>
+          </Link>
+
+          <Link
+            className="block rounded-2xl border border-brand-100 bg-brand-50/70 p-5 text-brand-700 transition hover:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100"
             href="/company-branding"
           >
             <span className="block text-lg font-semibold">Company Branding</span>

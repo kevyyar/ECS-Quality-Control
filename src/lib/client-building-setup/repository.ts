@@ -1,8 +1,16 @@
 import "server-only";
 
-import { and, asc, eq, isNull, sql, type SQL } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, sql, type SQL } from "drizzle-orm";
 
-import { areas, areaTypes, buildings, clients } from "@/db/schema";
+import {
+  areas,
+  areaTypes,
+  buildings,
+  clients,
+  inspectionTemplateItems,
+  inspectionTemplateSections,
+  inspectionTemplates,
+} from "@/db/schema";
 
 import { isSetupRecordId } from "./model";
 import type {
@@ -11,6 +19,10 @@ import type {
   AreaTypeInput,
   AreaTypeSetupRecord,
   BuildingInput,
+  InspectionTemplateInput,
+  InspectionTemplateItemRecord,
+  InspectionTemplateSectionRecord,
+  InspectionTemplateSetupRecord,
   BuildingSetupRecord,
   ClientInput,
   ClientSetupRecord,
@@ -21,6 +33,9 @@ type ClientRow = typeof clients.$inferSelect;
 type BuildingRow = typeof buildings.$inferSelect;
 type AreaTypeRow = typeof areaTypes.$inferSelect;
 type AreaRow = typeof areas.$inferSelect;
+type InspectionTemplateRow = typeof inspectionTemplates.$inferSelect;
+type InspectionTemplateSectionRow = typeof inspectionTemplateSections.$inferSelect;
+type InspectionTemplateItemRow = typeof inspectionTemplateItems.$inferSelect;
 type BuildingWithClientRow = {
   building: BuildingRow;
   client: {
@@ -62,7 +77,12 @@ type ListAreaOptions = ListOptions & {
   areaId?: string;
 };
 
-type SetupRecordType = "Client" | "Building" | "Area Type" | "Area";
+type SetupRecordType =
+  | "Client"
+  | "Building"
+  | "Area Type"
+  | "Area"
+  | "Inspection Template";
 type AreaParentField = "buildingId" | "areaTypeId";
 type CreateAreaTransactionResult =
   | { area: AreaRow | undefined }
@@ -138,6 +158,58 @@ function toAreaTypeSetupRecord(row: AreaTypeRow): AreaTypeSetupRecord {
   };
 }
 
+function toInspectionTemplateSectionRecord(
+  row: InspectionTemplateSectionRow,
+): InspectionTemplateSectionRecord {
+  return {
+    id: row.id,
+    templateId: row.templateId,
+    name: row.name,
+    position: row.position,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+}
+
+function toInspectionTemplateItemRecord(
+  row: InspectionTemplateItemRow,
+  sectionRows: InspectionTemplateSectionRow[],
+): InspectionTemplateItemRecord {
+  const section = row.sectionId
+    ? sectionRows.find((section) => section.id === row.sectionId)
+    : undefined;
+
+  return {
+    id: row.id,
+    templateId: row.templateId,
+    sectionId: row.sectionId,
+    sectionName: section?.name ?? null,
+    name: row.name,
+    description: row.description,
+    position: row.position,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+}
+
+function toInspectionTemplateSetupRecord(
+  row: InspectionTemplateRow,
+  sections: InspectionTemplateSectionRow[],
+  items: InspectionTemplateItemRow[],
+): InspectionTemplateSetupRecord {
+  return {
+    id: row.id,
+    name: row.name,
+    description: row.description,
+    archivedAt: row.archivedAt,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+    isArchived: row.archivedAt !== null,
+    sections: sections.map(toInspectionTemplateSectionRecord),
+    items: items.map((item) => toInspectionTemplateItemRecord(item, sections)),
+  };
+}
+
 function toAreaSetupRecord(row: AreaWithParentsRow): AreaSetupRecord {
   const isArchived = row.area.archivedAt !== null;
   const isBuildingArchived = row.building.archivedAt !== null;
@@ -183,6 +255,12 @@ function clientVisibilityCondition(visibility: SetupVisibility): SQL | undefined
 
 function areaTypeVisibilityCondition(visibility: SetupVisibility): SQL | undefined {
   return visibility === "active" ? isNull(areaTypes.archivedAt) : undefined;
+}
+
+function inspectionTemplateVisibilityCondition(
+  visibility: SetupVisibility,
+): SQL | undefined {
+  return visibility === "active" ? isNull(inspectionTemplates.archivedAt) : undefined;
 }
 
 function buildingConditions(options: ListBuildingOptions): SQL | undefined {
@@ -302,6 +380,87 @@ function requireExistingAreaType(row: AreaTypeRow | undefined): AreaTypeSetupRec
   return toAreaTypeSetupRecord(row);
 }
 
+async function hydrateInspectionTemplates(
+  rows: InspectionTemplateRow[],
+): Promise<InspectionTemplateSetupRecord[]> {
+  if (rows.length === 0) {
+    return [];
+  }
+
+  const { db } = await import("@/db/client");
+  const templateIds = rows.map((row) => row.id);
+  const sectionRows = await db
+    .select()
+    .from(inspectionTemplateSections)
+    .where(inArray(inspectionTemplateSections.templateId, templateIds))
+    .orderBy(
+      asc(inspectionTemplateSections.templateId),
+      asc(inspectionTemplateSections.position),
+    );
+  const itemRows = await db
+    .select()
+    .from(inspectionTemplateItems)
+    .where(inArray(inspectionTemplateItems.templateId, templateIds))
+    .orderBy(
+      asc(inspectionTemplateItems.templateId),
+      asc(inspectionTemplateItems.position),
+    );
+
+  return rows.map((row) =>
+    toInspectionTemplateSetupRecord(
+      row,
+      sectionRows.filter((section) => section.templateId === row.id),
+      itemRows.filter((item) => item.templateId === row.id),
+    ),
+  );
+}
+
+type SavedInspectionTemplateRows = {
+  template: InspectionTemplateRow | undefined;
+  sections: InspectionTemplateSectionRow[];
+  items: InspectionTemplateItemRow[];
+};
+
+async function requireSavedInspectionTemplate(
+  rows: SavedInspectionTemplateRows,
+): Promise<InspectionTemplateSetupRecord> {
+  if (!rows.template) {
+    throw new Error("Inspection Template setup record could not be saved.");
+  }
+
+  return toInspectionTemplateSetupRecord(rows.template, rows.sections, rows.items);
+}
+
+async function requireExistingInspectionTemplate(
+  row: InspectionTemplateRow | undefined,
+): Promise<InspectionTemplateSetupRecord> {
+  if (!row) {
+    throw new SetupRecordNotFoundError("Inspection Template");
+  }
+
+  const template = await getInspectionTemplate(row.id);
+
+  if (!template) {
+    throw new Error("Inspection Template setup record could not be loaded.");
+  }
+
+  return template;
+}
+
+function sectionIdByName(
+  sections: InspectionTemplateSectionRow[],
+): Map<string, string> {
+  return new Map(sections.map((section) => [section.name, section.id]));
+}
+
+function duplicateInspectionTemplateName(name: string): string {
+  return `${name.slice(0, 155)} Copy`;
+}
+
+function descriptionValue(value: string): string | null {
+  return value === "" ? null : value;
+}
+
 async function requireSavedArea(row: AreaRow | undefined): Promise<AreaSetupRecord> {
   if (!row) {
     throw new Error("Area setup record could not be saved.");
@@ -328,6 +487,263 @@ async function requireExistingArea(row: AreaRow | undefined): Promise<AreaSetupR
   }
 
   return area;
+}
+
+export async function listInspectionTemplates(
+  options: ListOptions = {},
+): Promise<InspectionTemplateSetupRecord[]> {
+  const { db } = await import("@/db/client");
+  const condition = inspectionTemplateVisibilityCondition(
+    options.visibility ?? "active",
+  );
+  const query = db.select().from(inspectionTemplates);
+  const rows = condition
+    ? await query.where(condition).orderBy(asc(inspectionTemplates.name))
+    : await query.orderBy(asc(inspectionTemplates.name));
+
+  return hydrateInspectionTemplates(rows);
+}
+
+export async function getInspectionTemplate(
+  id: string,
+): Promise<InspectionTemplateSetupRecord | null> {
+  if (!isSetupRecordId(id)) {
+    return null;
+  }
+
+  const { db } = await import("@/db/client");
+  const [row] = await db
+    .select()
+    .from(inspectionTemplates)
+    .where(eq(inspectionTemplates.id, id))
+    .limit(1);
+
+  if (!row) {
+    return null;
+  }
+
+  const [template] = await hydrateInspectionTemplates([row]);
+
+  return template ?? null;
+}
+
+export async function createInspectionTemplate(
+  input: InspectionTemplateInput,
+): Promise<InspectionTemplateSetupRecord> {
+  const { db } = await import("@/db/client");
+  const rows = await db.transaction(async (tx): Promise<SavedInspectionTemplateRows> => {
+    const [template] = await tx
+      .insert(inspectionTemplates)
+      .values({
+        name: input.name,
+        description: descriptionValue(input.description),
+      })
+      .returning();
+
+    if (!template) {
+      return { template, sections: [], items: [] };
+    }
+
+    const sections = input.sections.length
+      ? await tx
+          .insert(inspectionTemplateSections)
+          .values(
+            input.sections.map((section) => ({
+              templateId: template.id,
+              position: section.position,
+              name: section.name,
+            })),
+          )
+          .returning()
+      : [];
+    const sectionIds = sectionIdByName(sections);
+    const items = await tx
+      .insert(inspectionTemplateItems)
+      .values(
+        input.items.map((item) => ({
+          templateId: template.id,
+          sectionId: item.sectionName ? (sectionIds.get(item.sectionName) ?? null) : null,
+          position: item.position,
+          name: item.name,
+          description: descriptionValue(item.description),
+        })),
+      )
+      .returning();
+
+    return { template, sections, items };
+  });
+
+  return requireSavedInspectionTemplate(rows);
+}
+
+export async function updateInspectionTemplate(
+  id: string,
+  input: InspectionTemplateInput,
+): Promise<InspectionTemplateSetupRecord> {
+  const { db } = await import("@/db/client");
+  const rows = await db.transaction(async (tx): Promise<SavedInspectionTemplateRows> => {
+    const [template] = await tx
+      .update(inspectionTemplates)
+      .set({
+        name: input.name,
+        description: descriptionValue(input.description),
+        updatedAt: sql`now()`,
+      })
+      .where(eq(inspectionTemplates.id, id))
+      .returning();
+
+    if (!template) {
+      return { template, sections: [], items: [] };
+    }
+
+    await tx
+      .delete(inspectionTemplateItems)
+      .where(eq(inspectionTemplateItems.templateId, id));
+    await tx
+      .delete(inspectionTemplateSections)
+      .where(eq(inspectionTemplateSections.templateId, id));
+
+    const sections = input.sections.length
+      ? await tx
+          .insert(inspectionTemplateSections)
+          .values(
+            input.sections.map((section) => ({
+              templateId: template.id,
+              position: section.position,
+              name: section.name,
+            })),
+          )
+          .returning()
+      : [];
+    const sectionIds = sectionIdByName(sections);
+    const items = await tx
+      .insert(inspectionTemplateItems)
+      .values(
+        input.items.map((item) => ({
+          templateId: template.id,
+          sectionId: item.sectionName ? (sectionIds.get(item.sectionName) ?? null) : null,
+          position: item.position,
+          name: item.name,
+          description: descriptionValue(item.description),
+        })),
+      )
+      .returning();
+
+    return { template, sections, items };
+  });
+
+  if (!rows.template) {
+    throw new SetupRecordNotFoundError("Inspection Template");
+  }
+
+  return requireSavedInspectionTemplate(rows);
+}
+
+export async function duplicateInspectionTemplate(
+  id: string,
+): Promise<InspectionTemplateSetupRecord> {
+  const { db } = await import("@/db/client");
+  const rows = await db.transaction(async (tx): Promise<SavedInspectionTemplateRows> => {
+    const [source] = await tx
+      .select()
+      .from(inspectionTemplates)
+      .where(eq(inspectionTemplates.id, id))
+      .for("update")
+      .limit(1);
+
+    if (!source) {
+      return { template: undefined, sections: [], items: [] };
+    }
+
+    const sourceSections = await tx
+      .select()
+      .from(inspectionTemplateSections)
+      .where(eq(inspectionTemplateSections.templateId, source.id))
+      .orderBy(asc(inspectionTemplateSections.position));
+    const sourceItems = await tx
+      .select()
+      .from(inspectionTemplateItems)
+      .where(eq(inspectionTemplateItems.templateId, source.id))
+      .orderBy(asc(inspectionTemplateItems.position));
+    const [copy] = await tx
+      .insert(inspectionTemplates)
+      .values({
+        name: duplicateInspectionTemplateName(source.name),
+        description: source.description,
+      })
+      .returning();
+
+    if (!copy) {
+      return { template: copy, sections: [], items: [] };
+    }
+
+    const sections = sourceSections.length
+      ? await tx
+          .insert(inspectionTemplateSections)
+          .values(
+            sourceSections.map((section) => ({
+              templateId: copy.id,
+              position: section.position,
+              name: section.name,
+            })),
+          )
+          .returning()
+      : [];
+    const sectionIds = new Map(
+      sourceSections.map((section, index) => [section.id, sections[index]?.id]),
+    );
+    const items = sourceItems.length
+      ? await tx
+          .insert(inspectionTemplateItems)
+          .values(
+            sourceItems.map((item) => ({
+              templateId: copy.id,
+              sectionId: item.sectionId ? (sectionIds.get(item.sectionId) ?? null) : null,
+              position: item.position,
+              name: item.name,
+              description: item.description,
+            })),
+          )
+          .returning()
+      : [];
+
+    return { template: copy, sections, items };
+  });
+
+  if (!rows.template) {
+    throw new SetupRecordNotFoundError("Inspection Template");
+  }
+
+  return requireSavedInspectionTemplate(rows);
+}
+
+export async function archiveInspectionTemplate(
+  id: string,
+): Promise<InspectionTemplateSetupRecord> {
+  const { db } = await import("@/db/client");
+  const [row] = await db
+    .update(inspectionTemplates)
+    .set({
+      archivedAt: sql`coalesce(${inspectionTemplates.archivedAt}, now())`,
+      updatedAt: sql`now()`,
+    })
+    .where(eq(inspectionTemplates.id, id))
+    .returning();
+
+  return requireExistingInspectionTemplate(row);
+}
+
+export async function restoreInspectionTemplate(
+  id: string,
+): Promise<InspectionTemplateSetupRecord> {
+  const { db } = await import("@/db/client");
+  const [row] = await db
+    .update(inspectionTemplates)
+    .set({ archivedAt: null, updatedAt: sql`now()` })
+    .where(eq(inspectionTemplates.id, id))
+    .returning();
+
+  return requireExistingInspectionTemplate(row);
 }
 
 export async function listClients(

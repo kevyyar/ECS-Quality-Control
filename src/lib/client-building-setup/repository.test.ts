@@ -12,11 +12,13 @@ const {
   updateSet,
   updateWhere,
   updateReturning,
+  deleteWhere,
 } = vi.hoisted(() => ({
   db: {
     select: vi.fn(),
     insert: vi.fn(),
     update: vi.fn(),
+    delete: vi.fn(),
     transaction: vi.fn(),
   },
   selectFrom: vi.fn(),
@@ -29,6 +31,7 @@ const {
   updateSet: vi.fn(),
   updateWhere: vi.fn(),
   updateReturning: vi.fn(),
+  deleteWhere: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
@@ -40,10 +43,13 @@ const {
   archiveAreaType,
   archiveBuilding,
   archiveClient,
+  archiveInspectionTemplate,
   createArea,
   createAreaType,
   createBuilding,
   createClient,
+  createInspectionTemplate,
+  duplicateInspectionTemplate,
   getArea,
   getAreaType,
   getBuilding,
@@ -53,6 +59,7 @@ const {
   listBuildings,
   listClients,
   restoreArea,
+  restoreInspectionTemplate,
   restoreAreaType,
   restoreBuilding,
   restoreClient,
@@ -60,6 +67,7 @@ const {
   updateAreaType,
   updateBuilding,
   updateClient,
+  updateInspectionTemplate,
 } = await import("./repository");
 
 const createdAt = new Date("2026-05-28T00:00:00Z");
@@ -181,6 +189,69 @@ const areaWithArchivedAreaTypeRow = {
   },
 };
 
+const activeInspectionTemplateRow = {
+  id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+  name: "Restroom Standard",
+  description: "Weekly restroom checks",
+  archivedAt: null,
+  createdAt,
+  updatedAt,
+};
+
+const archivedInspectionTemplateRow = {
+  ...activeInspectionTemplateRow,
+  archivedAt,
+};
+
+const copiedInspectionTemplateRow = {
+  ...activeInspectionTemplateRow,
+  id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+  name: "Restroom Standard Copy",
+};
+
+const inspectionTemplateSectionRow = {
+  id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+  templateId: activeInspectionTemplateRow.id,
+  name: "Fixtures",
+  position: 1,
+  createdAt,
+  updatedAt,
+};
+
+const copiedInspectionTemplateSectionRow = {
+  ...inspectionTemplateSectionRow,
+  id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+  templateId: copiedInspectionTemplateRow.id,
+};
+
+const inspectionTemplateItemRow = {
+  id: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+  templateId: activeInspectionTemplateRow.id,
+  sectionId: inspectionTemplateSectionRow.id,
+  name: "Mirrors",
+  description: "No streaks",
+  position: 1,
+  createdAt,
+  updatedAt,
+};
+
+const copiedInspectionTemplateItemRow = {
+  ...inspectionTemplateItemRow,
+  id: "ffffffff-ffff-4fff-8fff-ffffffffffff",
+  templateId: copiedInspectionTemplateRow.id,
+  sectionId: copiedInspectionTemplateSectionRow.id,
+};
+
+function mockHydratedInspectionTemplate(
+  row: typeof activeInspectionTemplateRow | typeof archivedInspectionTemplateRow,
+  sections = [inspectionTemplateSectionRow],
+  items = [inspectionTemplateItemRow],
+): void {
+  const selectLimit = vi.fn().mockResolvedValueOnce([row]);
+  selectWhere.mockReturnValueOnce({ limit: selectLimit });
+  selectOrderBy.mockResolvedValueOnce(sections).mockResolvedValueOnce(items);
+}
+
 describe("Client and Building setup repository", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -211,6 +282,7 @@ describe("Client and Building setup repository", () => {
     updateSet.mockReturnValue({ where: updateWhere });
     updateWhere.mockReturnValue({ returning: updateReturning });
     db.update.mockReturnValue({ set: updateSet });
+    db.delete.mockReturnValue({ where: deleteWhere });
   });
 
   it("returns null for malformed Client and Building ids", async () => {
@@ -266,7 +338,7 @@ describe("Client and Building setup repository", () => {
       isArchived: false,
     });
 
-    expect(db).not.toHaveProperty("delete");
+    expect(db.delete).not.toHaveBeenCalled();
   });
 
   it("throws a not-found error when a Client mutation matches no rows", async () => {
@@ -396,7 +468,7 @@ describe("Client and Building setup repository", () => {
       isActive: false,
     });
 
-    expect(db).not.toHaveProperty("delete");
+    expect(db.delete).not.toHaveBeenCalled();
   });
 
   it("throws a not-found error when a Building mutation matches no rows", async () => {
@@ -463,7 +535,7 @@ describe("Client and Building setup repository", () => {
       isArchived: false,
     });
 
-    expect(db).not.toHaveProperty("delete");
+    expect(db.delete).not.toHaveBeenCalled();
   });
 
   it("throws a not-found error when an Area Type mutation matches no rows", async () => {
@@ -671,7 +743,7 @@ describe("Client and Building setup repository", () => {
       }),
     );
 
-    expect(db).not.toHaveProperty("delete");
+    expect(db.delete).not.toHaveBeenCalled();
   });
 
   it("throws a not-found error when an Area mutation matches no rows", async () => {
@@ -683,5 +755,229 @@ describe("Client and Building setup repository", () => {
       name: "SetupRecordNotFoundError",
       message: "Area setup record was not found.",
     });
+  });
+
+  it("creates Inspection Templates with optional sections and ordered items", async () => {
+    insertReturning
+      .mockResolvedValueOnce([activeInspectionTemplateRow])
+      .mockResolvedValueOnce([inspectionTemplateSectionRow])
+      .mockResolvedValueOnce([inspectionTemplateItemRow]);
+
+    await expect(
+      createInspectionTemplate({
+        name: "Restroom Standard",
+        description: "Weekly restroom checks",
+        sections: [{ name: "Fixtures", position: 1 }],
+        items: [
+          {
+            name: "Mirrors",
+            description: "No streaks",
+            sectionName: "Fixtures",
+            position: 1,
+          },
+        ],
+      }),
+    ).resolves.toEqual({
+      ...activeInspectionTemplateRow,
+      isArchived: false,
+      sections: [inspectionTemplateSectionRow],
+      items: [
+        {
+          ...inspectionTemplateItemRow,
+          sectionName: "Fixtures",
+        },
+      ],
+    });
+
+    expect(insertValues).toHaveBeenNthCalledWith(1, {
+      name: "Restroom Standard",
+      description: "Weekly restroom checks",
+    });
+    expect(insertValues).toHaveBeenNthCalledWith(2, [
+      {
+        templateId: activeInspectionTemplateRow.id,
+        position: 1,
+        name: "Fixtures",
+      },
+    ]);
+    expect(insertValues).toHaveBeenNthCalledWith(3, [
+      {
+        templateId: activeInspectionTemplateRow.id,
+        sectionId: inspectionTemplateSectionRow.id,
+        position: 1,
+        name: "Mirrors",
+        description: "No streaks",
+      },
+    ]);
+  });
+
+  it("updates Inspection Templates by replacing editable content", async () => {
+    updateReturning.mockResolvedValueOnce([{
+      ...activeInspectionTemplateRow,
+      name: "Restroom Detailed",
+      description: null,
+    }]);
+    insertReturning
+      .mockResolvedValueOnce([inspectionTemplateSectionRow])
+      .mockResolvedValueOnce([inspectionTemplateItemRow]);
+
+    await expect(
+      updateInspectionTemplate(activeInspectionTemplateRow.id, {
+        name: "Restroom Detailed",
+        description: "",
+        sections: [{ name: "Fixtures", position: 1 }],
+        items: [
+          {
+            name: "Mirrors",
+            description: "No streaks",
+            sectionName: "Fixtures",
+            position: 1,
+          },
+        ],
+      }),
+    ).resolves.toEqual({
+      ...activeInspectionTemplateRow,
+      name: "Restroom Detailed",
+      description: null,
+      isArchived: false,
+      sections: [inspectionTemplateSectionRow],
+      items: [{ ...inspectionTemplateItemRow, sectionName: "Fixtures" }],
+    });
+
+    expect(updateSet).toHaveBeenCalledWith({
+      name: "Restroom Detailed",
+      description: null,
+      updatedAt: expect.anything(),
+    });
+    expect(deleteWhere).toHaveBeenCalledTimes(2);
+    expect(insertValues).toHaveBeenNthCalledWith(1, [
+      {
+        templateId: activeInspectionTemplateRow.id,
+        position: 1,
+        name: "Fixtures",
+      },
+    ]);
+    expect(insertValues).toHaveBeenNthCalledWith(2, [
+      {
+        templateId: activeInspectionTemplateRow.id,
+        sectionId: inspectionTemplateSectionRow.id,
+        position: 1,
+        name: "Mirrors",
+        description: "No streaks",
+      },
+    ]);
+  });
+
+  it("throws a not-found error when an Inspection Template update matches no rows", async () => {
+    updateReturning.mockResolvedValueOnce([]);
+
+    await expect(
+      updateInspectionTemplate(activeInspectionTemplateRow.id, {
+        name: "Missing Template",
+        description: "",
+        sections: [],
+        items: [
+          {
+            name: "Mirrors",
+            description: "No streaks",
+            sectionName: null,
+            position: 1,
+          },
+        ],
+      }),
+    ).rejects.toMatchObject({
+      name: "SetupRecordNotFoundError",
+      message: "Inspection Template setup record was not found.",
+    });
+
+    expect(deleteWhere).not.toHaveBeenCalled();
+  });
+
+  it("duplicates Inspection Templates with sections and items", async () => {
+    const sourceLimit = vi.fn().mockResolvedValueOnce([activeInspectionTemplateRow]);
+    selectWhere.mockReturnValueOnce({ for: vi.fn(() => ({ limit: sourceLimit })) });
+    selectOrderBy
+      .mockResolvedValueOnce([inspectionTemplateSectionRow])
+      .mockResolvedValueOnce([inspectionTemplateItemRow]);
+    insertReturning
+      .mockResolvedValueOnce([copiedInspectionTemplateRow])
+      .mockResolvedValueOnce([copiedInspectionTemplateSectionRow])
+      .mockResolvedValueOnce([copiedInspectionTemplateItemRow]);
+
+    await expect(duplicateInspectionTemplate(activeInspectionTemplateRow.id)).resolves.toEqual({
+      ...copiedInspectionTemplateRow,
+      isArchived: false,
+      sections: [copiedInspectionTemplateSectionRow],
+      items: [{ ...copiedInspectionTemplateItemRow, sectionName: "Fixtures" }],
+    });
+
+    expect(insertValues).toHaveBeenNthCalledWith(1, {
+      name: "Restroom Standard Copy",
+      description: "Weekly restroom checks",
+    });
+    expect(insertValues).toHaveBeenNthCalledWith(2, [
+      {
+        templateId: copiedInspectionTemplateRow.id,
+        position: 1,
+        name: "Fixtures",
+      },
+    ]);
+    expect(insertValues).toHaveBeenNthCalledWith(3, [
+      {
+        templateId: copiedInspectionTemplateRow.id,
+        sectionId: copiedInspectionTemplateSectionRow.id,
+        position: 1,
+        name: "Mirrors",
+        description: "No streaks",
+      },
+    ]);
+  });
+
+  it("keeps duplicated Inspection Template names within the setup name limit", async () => {
+    const sourceName = "a".repeat(160);
+    const copyName = `${"a".repeat(155)} Copy`;
+    const source = { ...activeInspectionTemplateRow, name: sourceName };
+    const copy = { ...copiedInspectionTemplateRow, name: copyName };
+    const sourceLimit = vi.fn().mockResolvedValueOnce([source]);
+    selectWhere.mockReturnValueOnce({ for: vi.fn(() => ({ limit: sourceLimit })) });
+    selectOrderBy.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+    insertReturning.mockResolvedValueOnce([copy]);
+
+    await expect(duplicateInspectionTemplate(activeInspectionTemplateRow.id)).resolves.toEqual({
+      ...copy,
+      isArchived: false,
+      sections: [],
+      items: [],
+    });
+
+    expect(insertValues).toHaveBeenCalledWith({
+      name: copyName,
+      description: "Weekly restroom checks",
+    });
+  });
+
+  it("archives and restores Inspection Templates without deleting records", async () => {
+    updateReturning
+      .mockResolvedValueOnce([archivedInspectionTemplateRow])
+      .mockResolvedValueOnce([activeInspectionTemplateRow]);
+    mockHydratedInspectionTemplate(archivedInspectionTemplateRow);
+
+    await expect(archiveInspectionTemplate(activeInspectionTemplateRow.id)).resolves.toEqual(
+      expect.objectContaining({
+        id: activeInspectionTemplateRow.id,
+        isArchived: true,
+      }),
+    );
+
+    mockHydratedInspectionTemplate(activeInspectionTemplateRow);
+
+    await expect(restoreInspectionTemplate(activeInspectionTemplateRow.id)).resolves.toEqual(
+      expect.objectContaining({
+        id: activeInspectionTemplateRow.id,
+        isArchived: false,
+      }),
+    );
+
+    expect(db.delete).not.toHaveBeenCalled();
   });
 });

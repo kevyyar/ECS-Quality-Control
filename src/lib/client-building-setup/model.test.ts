@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  STARTER_INSPECTION_TEMPLATES,
   isSetupRecordId,
   parseAreaNameFormData,
   parseAreaFormData,
@@ -9,12 +10,18 @@ import {
   parseBuildingFormData,
   parseClientFormData,
   parseIdFormData,
+  parseInspectionTemplateFormData,
 } from "./model";
 
-function formData(values: Record<string, string>): FormData {
+function formData(values: Record<string, string | string[]>): FormData {
   const data = new FormData();
 
   Object.entries(values).forEach(([key, value]) => {
+    if (Array.isArray(value)) {
+      value.forEach((entry) => data.append(key, entry));
+      return;
+    }
+
     data.set(key, value);
   });
 
@@ -128,6 +135,115 @@ describe("parseAreaTypeFormData", () => {
       errors: { name: "Area Type name must be 160 characters or fewer." },
       values: { name },
     });
+  });
+});
+
+describe("parseInspectionTemplateFormData", () => {
+  it("normalizes valid Inspection Template items", () => {
+    expect(
+      parseInspectionTemplateFormData(
+        formData({
+          name: "  Restroom Standard  ",
+          description: "  Weekly restroom checks  ",
+          itemName: "  Mirrors  ",
+          itemDescription: "  No streaks or residue  ",
+        }),
+      ),
+    ).toEqual({
+      ok: true,
+      data: {
+        name: "Restroom Standard",
+        description: "Weekly restroom checks",
+        sections: [],
+        items: [
+          {
+            name: "Mirrors",
+            description: "No streaks or residue",
+            sectionName: null,
+            position: 1,
+          },
+        ],
+      },
+    });
+  });
+
+  it("rejects missing Inspection Template item names", () => {
+    expect(
+      parseInspectionTemplateFormData(
+        formData({
+          name: "Restroom Standard",
+          itemName: " ",
+          itemDescription: "No streaks",
+        }),
+      ),
+    ).toEqual({
+      ok: false,
+      errors: {},
+      itemErrors: [{ name: "Inspection Template item name is required." }],
+      values: {
+        name: "Restroom Standard",
+        description: "",
+        sections: [],
+        items: [{ name: "", description: "No streaks", sectionName: "" }],
+      },
+    });
+  });
+
+  it("preserves item ordering and optional Template Sections", () => {
+    expect(
+      parseInspectionTemplateFormData(
+        formData({
+          name: "Restroom Standard",
+          itemName: ["  Mirrors  ", "  Floors  ", " Dispensers "],
+          itemDescription: ["No streaks", "", "Stocked"],
+          itemSectionName: ["  Fixtures  ", "Floors", "Fixtures"],
+        }),
+      ),
+    ).toEqual({
+      ok: true,
+      data: {
+        name: "Restroom Standard",
+        description: "",
+        sections: [
+          { name: "Fixtures", position: 1 },
+          { name: "Floors", position: 2 },
+        ],
+        items: [
+          {
+            name: "Mirrors",
+            description: "No streaks",
+            sectionName: "Fixtures",
+            position: 1,
+          },
+          {
+            name: "Floors",
+            description: "",
+            sectionName: "Floors",
+            position: 2,
+          },
+          {
+            name: "Dispensers",
+            description: "Stocked",
+            sectionName: "Fixtures",
+            position: 3,
+          },
+        ],
+      },
+    });
+  });
+
+  it("defines starter Inspection Templates for the supported Area Types", () => {
+    expect(STARTER_INSPECTION_TEMPLATES.map((template) => template.name)).toEqual([
+      "Restroom",
+      "Office",
+      "Hallway",
+      "Lobby",
+    ]);
+    expect(
+      STARTER_INSPECTION_TEMPLATES.every((template) =>
+        template.items.every((item, index) => item.name !== "" && item.position === index + 1),
+      ),
+    ).toBe(true);
   });
 });
 
