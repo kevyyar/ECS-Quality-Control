@@ -29,6 +29,16 @@ import type {
   SetupVisibility,
 } from "./model";
 
+export {
+  ActiveBuildingInspectionPlanBuildingRequiredError,
+  ActiveBuildingInspectionPlanEntriesRequiredError,
+  getBuildingInspectionPlan,
+  isActiveBuildingInspectionPlanBuildingRequiredError,
+  isActiveBuildingInspectionPlanEntriesRequiredError,
+  listBuildingInspectionPlanSummaries,
+  saveBuildingInspectionPlan,
+} from "./repository/building-inspection-plan";
+
 type ClientRow = typeof clients.$inferSelect;
 type BuildingRow = typeof buildings.$inferSelect;
 type AreaTypeRow = typeof areaTypes.$inferSelect;

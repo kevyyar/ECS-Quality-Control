@@ -237,6 +237,11 @@ describe("Area setup actions", () => {
     expect(revalidatePath).toHaveBeenCalledWith("/setup/areas");
     expect(revalidatePath).toHaveBeenCalledWith(`/setup/areas/${areaRecord.id}`);
     expect(revalidatePath).toHaveBeenCalledWith(`/setup/buildings/${areaRecord.buildingId}`);
+    expect(revalidatePath).toHaveBeenCalledWith("/setup/building-inspection-plans");
+    expect(revalidatePath).toHaveBeenCalledWith(
+      `/setup/building-inspection-plans/${areaRecord.buildingId}`,
+    );
+    expect(revalidatePath).toHaveBeenCalledWith("/inspections/drafts");
     expect(revalidatePath).toHaveBeenCalledWith(`/setup/area-types/${areaRecord.areaTypeId}`);
   });
 

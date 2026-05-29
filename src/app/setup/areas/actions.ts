@@ -19,6 +19,8 @@ import {
   updateArea,
 } from "@/lib/client-building-setup/repository";
 
+import { revalidateBuildingInspectionPlanViews } from "../building-inspection-plans/revalidation";
+
 export type AreaSetupActionState =
   | { status: "idle" }
   | { status: "success"; message: string }
@@ -35,6 +37,7 @@ function revalidateAreaSetupViews(
 ): void {
   revalidatePath("/setup");
   revalidatePath("/setup/areas");
+  revalidateBuildingInspectionPlanViews(buildingId);
 
   if (areaId) {
     revalidatePath(`/setup/areas/${areaId}`);

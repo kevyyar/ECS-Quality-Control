@@ -6,6 +6,7 @@ import {
   integer,
   pgTable,
   timestamp,
+  uniqueIndex,
   uuid,
   varchar,
 } from "drizzle-orm/pg-core";
@@ -204,6 +205,67 @@ export const inspectionTemplateItems = pgTable(
       sql`length(btrim(${table.name})) > 0`,
     ),
     check("inspection_template_items_position_positive", sql`${table.position} > 0`),
+  ],
+).enableRLS();
+
+export const buildingInspectionPlans = pgTable(
+  "building_inspection_plans",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    buildingId: uuid("building_id")
+      .notNull()
+      .references(() => buildings.id, { onDelete: "restrict" }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("building_inspection_plans_building_id_unique").on(table.buildingId),
+  ],
+).enableRLS();
+
+// Plan entry rows are replaceable setup configuration: saves delete and reinsert
+// entries, so ids are not stable. Future Draft/Submitted Inspection rows must
+// snapshot names and template content — never FK to building_inspection_plan_entries.id.
+export const buildingInspectionPlanEntries = pgTable(
+  "building_inspection_plan_entries",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    planId: uuid("plan_id")
+      .notNull()
+      .references(() => buildingInspectionPlans.id, { onDelete: "restrict" }),
+    areaId: uuid("area_id")
+      .notNull()
+      .references(() => areas.id, { onDelete: "restrict" }),
+    inspectionTemplateId: uuid("inspection_template_id")
+      .notNull()
+      .references(() => inspectionTemplates.id, { onDelete: "restrict" }),
+    position: integer("position").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("building_inspection_plan_entries_plan_id_idx").on(table.planId),
+    index("building_inspection_plan_entries_area_id_idx").on(table.areaId),
+    index("building_inspection_plan_entries_template_id_idx").on(
+      table.inspectionTemplateId,
+    ),
+    uniqueIndex("building_inspection_plan_entries_plan_area_unique").on(
+      table.planId,
+      table.areaId,
+    ),
+    uniqueIndex("building_inspection_plan_entries_plan_position_unique").on(
+      table.planId,
+      table.position,
+    ),
+    check("building_inspection_plan_entries_position_positive", sql`${table.position} > 0`),
   ],
 ).enableRLS();
 

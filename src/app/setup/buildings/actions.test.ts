@@ -164,6 +164,11 @@ describe("Building setup actions", () => {
     expect(revalidatePath).toHaveBeenCalledWith("/setup/buildings");
     expect(revalidatePath).toHaveBeenCalledWith("/setup/areas");
     expect(revalidatePath).toHaveBeenCalledWith(`/setup/buildings/${buildingRecord.id}`);
+    expect(revalidatePath).toHaveBeenCalledWith("/setup/building-inspection-plans");
+    expect(revalidatePath).toHaveBeenCalledWith(
+      `/setup/building-inspection-plans/${buildingRecord.id}`,
+    );
+    expect(revalidatePath).toHaveBeenCalledWith("/inspections/drafts");
     expect(revalidatePath).toHaveBeenCalledWith(`/setup/clients/${buildingRecord.clientId}`);
   });
 

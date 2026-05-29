@@ -4,8 +4,10 @@ import { notFound } from "next/navigation";
 import { requireProtectedAction } from "@/lib/auth/session";
 import {
   getBuilding,
+  getBuildingInspectionPlan,
   listAreas,
 } from "@/lib/client-building-setup/repository";
+import { summarizeBuildingInspectionPlanEntryCounts } from "@/lib/client-building-setup/model";
 
 import { archiveBuildingAction, restoreBuildingAction } from "../actions";
 import { BuildingEditForm } from "../building-form";
@@ -46,6 +48,32 @@ function statusLabel(building: NonNullable<Awaited<ReturnType<typeof getBuilding
   return "Active";
 }
 
+function buildingInspectionPlanDescription(
+  plan: Awaited<ReturnType<typeof getBuildingInspectionPlan>>,
+): string {
+  if (!plan) {
+    return "No plan configured yet";
+  }
+
+  const summary = summarizeBuildingInspectionPlanEntryCounts(plan.entries);
+
+  if (summary.isConfigured) {
+    const pairLabel = summary.activeEntryCount === 1 ? "pair" : "pairs";
+    if (summary.staleEntryCount > 0) {
+      return `${summary.activeEntryCount} active Area/template ${pairLabel} · ${summary.staleEntryCount} inactive`;
+    }
+
+    return `${summary.activeEntryCount} active Area/template ${pairLabel} configured`;
+  }
+
+  if (summary.entryCount > 0) {
+    const pairLabel = summary.entryCount === 1 ? "pair" : "pairs";
+    return `${summary.entryCount} saved ${pairLabel} · all inactive`;
+  }
+
+  return "No plan configured yet";
+}
+
 export default async function BuildingDetailPage({ params }: BuildingDetailPageProps) {
   await requireProtectedAction("manageSetup");
 
@@ -56,10 +84,13 @@ export default async function BuildingDetailPage({ params }: BuildingDetailPageP
     notFound();
   }
 
-  const areas = await listAreas({
-    visibility: "historical",
-    buildingId: building.id,
-  });
+  const [areas, inspectionPlan] = await Promise.all([
+    listAreas({
+      visibility: "historical",
+      buildingId: building.id,
+    }),
+    getBuildingInspectionPlan(building.id),
+  ]);
 
   return (
     <main className="min-h-screen bg-slate-50 px-6 py-10 text-ink sm:px-10">
@@ -105,6 +136,25 @@ export default async function BuildingDetailPage({ params }: BuildingDetailPageP
             {building.isArchived ? "Restore Building" : "Archive Building"}
           </button>
         </form>
+
+        <div className="rounded-2xl border border-slate-200 p-5">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-950">
+                Building Inspection Plan
+              </h2>
+              <p className="mt-1 text-sm text-muted-ink">
+                {buildingInspectionPlanDescription(inspectionPlan)}
+              </p>
+            </div>
+            <Link
+              className="text-sm font-semibold text-brand-700"
+              href={`/setup/building-inspection-plans/${building.id}`}
+            >
+              Manage plan
+            </Link>
+          </div>
+        </div>
 
         <div className="space-y-4">
           <div className="flex items-center justify-between gap-4">

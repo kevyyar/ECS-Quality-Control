@@ -17,6 +17,8 @@ import {
   updateClient,
 } from "@/lib/client-building-setup/repository";
 
+import { revalidateBuildingInspectionPlanViews } from "../building-inspection-plans/revalidation";
+
 export type ClientSetupActionState =
   | { status: "idle" }
   | { status: "success"; message: string }
@@ -31,6 +33,7 @@ function revalidateClientSetupViews(clientId?: string): void {
   revalidatePath("/setup/clients");
   revalidatePath("/setup/buildings");
   revalidatePath("/setup/areas");
+  revalidateBuildingInspectionPlanViews();
 
   if (clientId) {
     revalidatePath(`/setup/clients/${clientId}`);

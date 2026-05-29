@@ -123,6 +123,12 @@ describe("Client setup actions", () => {
     expect(revalidatePath).toHaveBeenCalledWith("/setup/clients/11111111-1111-4111-8111-111111111111");
     expect(revalidatePath).toHaveBeenCalledWith("/setup/buildings");
     expect(revalidatePath).toHaveBeenCalledWith("/setup/areas");
+    expect(revalidatePath).toHaveBeenCalledWith("/setup/building-inspection-plans");
+    expect(revalidatePath).toHaveBeenCalledWith(
+      "/setup/building-inspection-plans/[buildingId]",
+      "page",
+    );
+    expect(revalidatePath).toHaveBeenCalledWith("/inspections/drafts");
   });
 
   it("updates Clients by id and revalidates their detail page", async () => {

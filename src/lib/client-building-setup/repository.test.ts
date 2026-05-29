@@ -13,6 +13,7 @@ const {
   updateWhere,
   updateReturning,
   deleteWhere,
+  selectLeftJoin,
 } = vi.hoisted(() => ({
   db: {
     select: vi.fn(),
@@ -32,6 +33,7 @@ const {
   updateWhere: vi.fn(),
   updateReturning: vi.fn(),
   deleteWhere: vi.fn(),
+  selectLeftJoin: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
@@ -39,6 +41,8 @@ vi.mock("@/db/client", () => ({ db }));
 
 const {
   ActiveAreaParentsRequiredError,
+  ActiveBuildingInspectionPlanBuildingRequiredError,
+  ActiveBuildingInspectionPlanEntriesRequiredError,
   archiveArea,
   archiveAreaType,
   archiveBuilding,
@@ -50,12 +54,14 @@ const {
   createClient,
   createInspectionTemplate,
   duplicateInspectionTemplate,
+  getBuildingInspectionPlan,
   getArea,
   getAreaType,
   getBuilding,
   getClient,
   listAreaTypes,
   listAreas,
+  listBuildingInspectionPlanSummaries,
   listBuildings,
   listClients,
   restoreArea,
@@ -63,6 +69,7 @@ const {
   restoreAreaType,
   restoreBuilding,
   restoreClient,
+  saveBuildingInspectionPlan,
   updateArea,
   updateAreaType,
   updateBuilding,
@@ -129,6 +136,58 @@ const archivedAreaTypeRow = {
   id: "66666666-6666-4666-8666-666666666666",
   name: "Archived Area Type",
   archivedAt,
+};
+
+const secondActiveAreaRow = {
+  area: {
+    id: "10101010-1010-4101-8101-101010101010",
+    buildingId: activeBuildingRow.building.id,
+    areaTypeId: activeAreaTypeRow.id,
+    name: "Second Floor Restroom",
+    archivedAt: null,
+    createdAt,
+    updatedAt,
+  },
+  building: {
+    id: activeBuildingRow.building.id,
+    name: activeBuildingRow.building.name,
+    archivedAt: null,
+  },
+  client: {
+    id: activeClientRow.id,
+    name: activeClientRow.name,
+    archivedAt: null,
+  },
+  areaType: {
+    name: activeAreaTypeRow.name,
+    archivedAt: null,
+  },
+};
+
+const otherBuildingAreaRow = {
+  area: {
+    id: "12121212-1212-4121-8121-121212121212",
+    buildingId: "13131313-1313-4131-8131-131313131313",
+    areaTypeId: activeAreaTypeRow.id,
+    name: "Other Building Restroom",
+    archivedAt: null,
+    createdAt,
+    updatedAt,
+  },
+  building: {
+    id: "13131313-1313-4131-8131-131313131313",
+    name: "Other Building",
+    archivedAt: null,
+  },
+  client: {
+    id: activeClientRow.id,
+    name: activeClientRow.name,
+    archivedAt: null,
+  },
+  areaType: {
+    name: activeAreaTypeRow.name,
+    archivedAt: null,
+  },
 };
 
 const activeAreaRow = {
@@ -224,6 +283,55 @@ const copiedInspectionTemplateSectionRow = {
   templateId: copiedInspectionTemplateRow.id,
 };
 
+const buildingInspectionPlanRow = {
+  id: "19191919-1919-4191-8191-191919191919",
+  buildingId: activeBuildingRow.building.id,
+  createdAt,
+  updatedAt,
+};
+
+const buildingInspectionPlanEntryRow = {
+  id: "20202020-2020-4202-8202-202020202020",
+  planId: buildingInspectionPlanRow.id,
+  areaId: activeAreaRow.area.id,
+  inspectionTemplateId: activeInspectionTemplateRow.id,
+  position: 1,
+  createdAt,
+  updatedAt,
+};
+
+const secondBuildingInspectionPlanEntryRow = {
+  id: "21212121-2121-4212-8212-212121212121",
+  planId: buildingInspectionPlanRow.id,
+  areaId: secondActiveAreaRow.area.id,
+  inspectionTemplateId: copiedInspectionTemplateRow.id,
+  position: 2,
+  createdAt,
+  updatedAt,
+};
+
+const hydratedBuildingInspectionPlanRow = {
+  plan: buildingInspectionPlanRow,
+  building: activeBuildingRow.building,
+  client: { id: activeClientRow.id, name: activeClientRow.name, archivedAt: null },
+  entry: buildingInspectionPlanEntryRow,
+  area: activeAreaRow.area,
+  areaType: { archivedAt: null },
+  inspectionTemplate: activeInspectionTemplateRow,
+};
+
+const hydratedBuildingInspectionPlanRows = [hydratedBuildingInspectionPlanRow];
+
+const emptyHydratedBuildingInspectionPlanRows = [
+  {
+    ...hydratedBuildingInspectionPlanRow,
+    entry: null,
+    area: null,
+    areaType: null,
+    inspectionTemplate: null,
+  },
+];
+
 const inspectionTemplateItemRow = {
   id: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
   templateId: activeInspectionTemplateRow.id,
@@ -258,12 +366,19 @@ describe("Client and Building setup repository", () => {
 
     selectFrom.mockReturnValue({
       innerJoin: selectInnerJoin,
+      leftJoin: selectLeftJoin,
       where: selectWhere,
       orderBy: selectOrderBy,
       limit: vi.fn(),
     });
     selectInnerJoin.mockReturnValue({
       innerJoin: selectInnerJoin,
+      leftJoin: selectLeftJoin,
+      where: selectWhere,
+      orderBy: selectOrderBy,
+    });
+    selectLeftJoin.mockReturnValue({
+      leftJoin: selectLeftJoin,
       where: selectWhere,
       orderBy: selectOrderBy,
     });
@@ -979,5 +1094,344 @@ describe("Client and Building setup repository", () => {
     );
 
     expect(db.delete).not.toHaveBeenCalled();
+  });
+
+  it("returns null for malformed Building Inspection Plan ids", async () => {
+    await expect(getBuildingInspectionPlan("not-a-uuid")).resolves.toBeNull();
+
+    expect(db.select).not.toHaveBeenCalled();
+  });
+
+  it("hydrates a Building Inspection Plan with ordered Area/template pairs", async () => {
+    selectOrderBy.mockResolvedValueOnce(hydratedBuildingInspectionPlanRows);
+
+    await expect(getBuildingInspectionPlan(activeBuildingRow.building.id)).resolves.toEqual({
+      id: buildingInspectionPlanRow.id,
+      buildingId: activeBuildingRow.building.id,
+      buildingName: activeBuildingRow.building.name,
+      clientId: activeClientRow.id,
+      clientName: activeClientRow.name,
+      buildingArchivedAt: null,
+      clientArchivedAt: null,
+      createdAt,
+      updatedAt,
+      isBuildingActive: true,
+      entries: [
+        {
+          id: buildingInspectionPlanEntryRow.id,
+          planId: buildingInspectionPlanRow.id,
+          areaId: activeAreaRow.area.id,
+          areaName: activeAreaRow.area.name,
+          areaArchivedAt: null,
+          areaTypeArchivedAt: null,
+          inspectionTemplateId: activeInspectionTemplateRow.id,
+          inspectionTemplateName: activeInspectionTemplateRow.name,
+          inspectionTemplateArchivedAt: null,
+          position: 1,
+          createdAt,
+          updatedAt,
+          isAreaActive: true,
+          isInspectionTemplateActive: true,
+          isActive: true,
+        },
+      ],
+    });
+  });
+
+  it("hydrates a Building Inspection Plan shell with zero entries", async () => {
+    selectOrderBy.mockResolvedValueOnce(emptyHydratedBuildingInspectionPlanRows);
+
+    await expect(getBuildingInspectionPlan(activeBuildingRow.building.id)).resolves.toEqual({
+      id: buildingInspectionPlanRow.id,
+      buildingId: activeBuildingRow.building.id,
+      buildingName: activeBuildingRow.building.name,
+      clientId: activeClientRow.id,
+      clientName: activeClientRow.name,
+      buildingArchivedAt: null,
+      clientArchivedAt: null,
+      createdAt,
+      updatedAt,
+      isBuildingActive: true,
+      entries: [],
+    });
+  });
+
+  it("lists active Building Inspection Plan summaries by default", async () => {
+    selectOrderBy
+      .mockResolvedValueOnce([activeBuildingRow])
+      .mockResolvedValueOnce([
+        {
+          plan: buildingInspectionPlanRow,
+          building: { archivedAt: null },
+          client: { archivedAt: null },
+          entry: buildingInspectionPlanEntryRow,
+          area: { archivedAt: null },
+          areaType: { archivedAt: null },
+          inspectionTemplate: { archivedAt: null },
+        },
+      ]);
+
+    await expect(listBuildingInspectionPlanSummaries()).resolves.toEqual([
+      {
+        buildingId: activeBuildingRow.building.id,
+        buildingName: activeBuildingRow.building.name,
+        clientId: activeClientRow.id,
+        clientName: activeClientRow.name,
+        buildingArchivedAt: null,
+        clientArchivedAt: null,
+        planId: buildingInspectionPlanRow.id,
+        entryCount: 1,
+        activeEntryCount: 1,
+        staleEntryCount: 0,
+        updatedAt,
+        isConfigured: true,
+        isBuildingActive: true,
+      },
+    ]);
+  });
+
+  it("does not treat stale-only Building Inspection Plans as configured", async () => {
+    selectOrderBy
+      .mockResolvedValueOnce([activeBuildingRow])
+      .mockResolvedValueOnce([
+        {
+          plan: buildingInspectionPlanRow,
+          building: { archivedAt: null },
+          client: { archivedAt: null },
+          entry: buildingInspectionPlanEntryRow,
+          area: { archivedAt },
+          areaType: { archivedAt: null },
+          inspectionTemplate: { archivedAt: null },
+        },
+      ]);
+
+    await expect(listBuildingInspectionPlanSummaries()).resolves.toEqual([
+      expect.objectContaining({
+        buildingId: activeBuildingRow.building.id,
+        entryCount: 1,
+        activeEntryCount: 0,
+        staleEntryCount: 1,
+        isConfigured: false,
+      }),
+    ]);
+  });
+
+  it("creates a Building Inspection Plan for active setup records", async () => {
+    const buildingLimit = vi.fn().mockResolvedValueOnce([
+      {
+        building: activeBuildingRow.building,
+        client: { id: activeClientRow.id, name: activeClientRow.name, archivedAt: null },
+      },
+    ]);
+    const existingPlanLimit = vi.fn().mockResolvedValueOnce([]);
+    selectWhere
+      .mockReturnValueOnce({ for: vi.fn(() => ({ limit: buildingLimit })) })
+      .mockReturnValueOnce({ for: vi.fn().mockResolvedValueOnce([activeAreaRow]) })
+      .mockReturnValueOnce({ for: vi.fn().mockResolvedValueOnce([activeInspectionTemplateRow]) })
+      .mockReturnValueOnce({ for: vi.fn(() => ({ limit: existingPlanLimit })) });
+    insertReturning.mockResolvedValueOnce([buildingInspectionPlanRow]);
+    selectOrderBy.mockResolvedValueOnce(hydratedBuildingInspectionPlanRows);
+
+    await expect(
+      saveBuildingInspectionPlan({
+        buildingId: activeBuildingRow.building.id,
+        entries: [
+          {
+            areaId: activeAreaRow.area.id,
+            inspectionTemplateId: activeInspectionTemplateRow.id,
+            position: 1,
+          },
+        ],
+      }),
+    ).resolves.toEqual(expect.objectContaining({ id: buildingInspectionPlanRow.id }));
+
+    expect(insertValues).toHaveBeenNthCalledWith(1, {
+      buildingId: activeBuildingRow.building.id,
+    });
+    expect(insertValues).toHaveBeenNthCalledWith(2, [
+      {
+        planId: buildingInspectionPlanRow.id,
+        areaId: activeAreaRow.area.id,
+        inspectionTemplateId: activeInspectionTemplateRow.id,
+        position: 1,
+      },
+    ]);
+  });
+
+  it("updates an existing Building Inspection Plan by replacing entries", async () => {
+    const buildingLimit = vi.fn().mockResolvedValueOnce([
+      {
+        building: activeBuildingRow.building,
+        client: { id: activeClientRow.id, name: activeClientRow.name, archivedAt: null },
+      },
+    ]);
+    const existingPlanLimit = vi.fn().mockResolvedValueOnce([buildingInspectionPlanRow]);
+    selectWhere
+      .mockReturnValueOnce({ for: vi.fn(() => ({ limit: buildingLimit })) })
+      .mockReturnValueOnce({ for: vi.fn().mockResolvedValueOnce([activeAreaRow, secondActiveAreaRow]) })
+      .mockReturnValueOnce({
+        for: vi.fn().mockResolvedValueOnce([
+          activeInspectionTemplateRow,
+          copiedInspectionTemplateRow,
+        ]),
+      })
+      .mockReturnValueOnce({ for: vi.fn(() => ({ limit: existingPlanLimit })) });
+    updateReturning.mockResolvedValueOnce([buildingInspectionPlanRow]);
+    selectOrderBy.mockResolvedValueOnce([
+      ...hydratedBuildingInspectionPlanRows,
+      {
+        ...hydratedBuildingInspectionPlanRow,
+        entry: secondBuildingInspectionPlanEntryRow,
+        area: secondActiveAreaRow.area,
+        inspectionTemplate: copiedInspectionTemplateRow,
+      },
+    ]);
+
+    await expect(
+      saveBuildingInspectionPlan({
+        buildingId: activeBuildingRow.building.id,
+        entries: [
+          {
+            areaId: activeAreaRow.area.id,
+            inspectionTemplateId: activeInspectionTemplateRow.id,
+            position: 1,
+          },
+          {
+            areaId: secondActiveAreaRow.area.id,
+            inspectionTemplateId: copiedInspectionTemplateRow.id,
+            position: 2,
+          },
+        ],
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        id: buildingInspectionPlanRow.id,
+        entries: expect.arrayContaining([
+          expect.objectContaining({ areaId: secondActiveAreaRow.area.id, position: 2 }),
+        ]),
+      }),
+    );
+
+    expect(updateSet).toHaveBeenCalledWith({ updatedAt: expect.anything() });
+    expect(deleteWhere).toHaveBeenCalledTimes(1);
+    expect(insertValues).toHaveBeenCalledWith([
+      {
+        planId: buildingInspectionPlanRow.id,
+        areaId: activeAreaRow.area.id,
+        inspectionTemplateId: activeInspectionTemplateRow.id,
+        position: 1,
+      },
+      {
+        planId: buildingInspectionPlanRow.id,
+        areaId: secondActiveAreaRow.area.id,
+        inspectionTemplateId: copiedInspectionTemplateRow.id,
+        position: 2,
+      },
+    ]);
+  });
+
+  it("rejects Building Inspection Plan saves for inactive Buildings", async () => {
+    const buildingLimit = vi.fn().mockResolvedValueOnce([
+      {
+        building: { ...activeBuildingRow.building, archivedAt },
+        client: { id: activeClientRow.id, name: activeClientRow.name, archivedAt: null },
+      },
+    ]);
+    selectWhere.mockReturnValueOnce({ for: vi.fn(() => ({ limit: buildingLimit })) });
+
+    const result = saveBuildingInspectionPlan({
+      buildingId: activeBuildingRow.building.id,
+      entries: [
+        {
+          areaId: activeAreaRow.area.id,
+          inspectionTemplateId: activeInspectionTemplateRow.id,
+          position: 1,
+        },
+      ],
+    });
+
+    await expect(result).rejects.toBeInstanceOf(
+      ActiveBuildingInspectionPlanBuildingRequiredError,
+    );
+    expect(insertValues).not.toHaveBeenCalled();
+  });
+
+  it("rejects inactive or cross-Building Area/template plan entries", async () => {
+    const buildingLimit = vi.fn().mockResolvedValueOnce([
+      {
+        building: activeBuildingRow.building,
+        client: { id: activeClientRow.id, name: activeClientRow.name, archivedAt: null },
+      },
+    ]);
+    selectWhere
+      .mockReturnValueOnce({ for: vi.fn(() => ({ limit: buildingLimit })) })
+      .mockReturnValueOnce({ for: vi.fn().mockResolvedValueOnce([otherBuildingAreaRow]) })
+      .mockReturnValueOnce({ for: vi.fn().mockResolvedValueOnce([archivedInspectionTemplateRow]) });
+
+    const result = saveBuildingInspectionPlan({
+      buildingId: activeBuildingRow.building.id,
+      entries: [
+        {
+          areaId: otherBuildingAreaRow.area.id,
+          inspectionTemplateId: archivedInspectionTemplateRow.id,
+          position: 1,
+        },
+      ],
+    });
+
+    await expect(result).rejects.toBeInstanceOf(
+      ActiveBuildingInspectionPlanEntriesRequiredError,
+    );
+    await expect(result).rejects.toMatchObject({
+      entryErrors: [
+        {
+          areaId: "Select an active Area.",
+          inspectionTemplateId: "Select an active Inspection Template.",
+        },
+      ],
+    });
+    expect(insertValues).not.toHaveBeenCalled();
+  });
+
+  it("rejects duplicate Area entries before hitting the database unique constraint", async () => {
+    const buildingLimit = vi.fn().mockResolvedValueOnce([
+      {
+        building: activeBuildingRow.building,
+        client: { id: activeClientRow.id, name: activeClientRow.name, archivedAt: null },
+      },
+    ]);
+    selectWhere
+      .mockReturnValueOnce({ for: vi.fn(() => ({ limit: buildingLimit })) })
+      .mockReturnValueOnce({ for: vi.fn().mockResolvedValueOnce([activeAreaRow]) })
+      .mockReturnValueOnce({
+        for: vi.fn().mockResolvedValueOnce([
+          activeInspectionTemplateRow,
+          copiedInspectionTemplateRow,
+        ]),
+      });
+
+    const result = saveBuildingInspectionPlan({
+      buildingId: activeBuildingRow.building.id,
+      entries: [
+        {
+          areaId: activeAreaRow.area.id,
+          inspectionTemplateId: activeInspectionTemplateRow.id,
+          position: 1,
+        },
+        {
+          areaId: activeAreaRow.area.id,
+          inspectionTemplateId: copiedInspectionTemplateRow.id,
+          position: 2,
+        },
+      ],
+    });
+
+    await expect(result).rejects.toMatchObject({
+      entryErrors: [
+        {},
+        { areaId: "Each Area can appear only once in a Building Inspection Plan." },
+      ],
+    });
+    expect(insertValues).not.toHaveBeenCalled();
   });
 });

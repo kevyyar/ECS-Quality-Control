@@ -1,16 +1,20 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  BUILDING_INSPECTION_PLAN_ENTRY_SNAPSHOT_CONTRACT,
   STARTER_INSPECTION_TEMPLATES,
+  isBuildingInspectionPlanEntryActive,
   isSetupRecordId,
   parseAreaNameFormData,
   parseAreaFormData,
   parseAreaTypeFormData,
+  parseBuildingInspectionPlanFormData,
   parseBuildingNameFormData,
   parseBuildingFormData,
   parseClientFormData,
   parseIdFormData,
   parseInspectionTemplateFormData,
+  summarizeBuildingInspectionPlanEntryCounts,
 } from "./model";
 
 function formData(values: Record<string, string | string[]>): FormData {
@@ -247,6 +251,142 @@ describe("parseInspectionTemplateFormData", () => {
   });
 });
 
+describe("parseBuildingInspectionPlanFormData", () => {
+  it("normalizes one Area/template pair for a Building Inspection Plan", () => {
+    expect(
+      parseBuildingInspectionPlanFormData(
+        formData({
+          buildingId: "33333333-3333-4333-8333-333333333333",
+          areaId: "77777777-7777-4777-8777-777777777777",
+          inspectionTemplateId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        }),
+      ),
+    ).toEqual({
+      ok: true,
+      data: {
+        buildingId: "33333333-3333-4333-8333-333333333333",
+        entries: [
+          {
+            areaId: "77777777-7777-4777-8777-777777777777",
+            inspectionTemplateId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            position: 1,
+          },
+        ],
+      },
+    });
+  });
+
+  it("preserves ordered Area/template pairs", () => {
+    expect(
+      parseBuildingInspectionPlanFormData(
+        formData({
+          buildingId: "33333333-3333-4333-8333-333333333333",
+          areaId: [
+            "77777777-7777-4777-8777-777777777777",
+            "88888888-8888-4888-8888-888888888888",
+          ],
+          inspectionTemplateId: [
+            "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+          ],
+        }),
+      ),
+    ).toEqual({
+      ok: true,
+      data: {
+        buildingId: "33333333-3333-4333-8333-333333333333",
+        entries: [
+          {
+            areaId: "77777777-7777-4777-8777-777777777777",
+            inspectionTemplateId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            position: 1,
+          },
+          {
+            areaId: "88888888-8888-4888-8888-888888888888",
+            inspectionTemplateId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+            position: 2,
+          },
+        ],
+      },
+    });
+  });
+
+  it("rejects missing plans and invalid Building ids", () => {
+    expect(parseBuildingInspectionPlanFormData(formData({ buildingId: "not-a-building" }))).toEqual({
+      ok: false,
+      errors: {
+        buildingId: "Select an active Building.",
+        entries: "Add at least one Area/template pair.",
+      },
+      entryErrors: [],
+      values: { buildingId: "not-a-building", entries: [] },
+    });
+  });
+
+  it("rejects invalid Area/template ids", () => {
+    expect(
+      parseBuildingInspectionPlanFormData(
+        formData({
+          buildingId: "33333333-3333-4333-8333-333333333333",
+          areaId: "not-an-area",
+          inspectionTemplateId: "not-a-template",
+        }),
+      ),
+    ).toEqual({
+      ok: false,
+      errors: {},
+      entryErrors: [
+        {
+          areaId: "Select an active Area.",
+          inspectionTemplateId: "Select an active Inspection Template.",
+        },
+      ],
+      values: {
+        buildingId: "33333333-3333-4333-8333-333333333333",
+        entries: [{ areaId: "not-an-area", inspectionTemplateId: "not-a-template" }],
+      },
+    });
+  });
+
+  it("rejects duplicate Areas", () => {
+    expect(
+      parseBuildingInspectionPlanFormData(
+        formData({
+          buildingId: "33333333-3333-4333-8333-333333333333",
+          areaId: [
+            "77777777-7777-4777-8777-777777777777",
+            "77777777-7777-4777-8777-777777777777",
+          ],
+          inspectionTemplateId: [
+            "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+          ],
+        }),
+      ),
+    ).toEqual({
+      ok: false,
+      errors: {},
+      entryErrors: [
+        {},
+        { areaId: "Each Area can appear only once in a Building Inspection Plan." },
+      ],
+      values: {
+        buildingId: "33333333-3333-4333-8333-333333333333",
+        entries: [
+          {
+            areaId: "77777777-7777-4777-8777-777777777777",
+            inspectionTemplateId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          },
+          {
+            areaId: "77777777-7777-4777-8777-777777777777",
+            inspectionTemplateId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+          },
+        ],
+      },
+    });
+  });
+});
+
 describe("parseAreaFormData", () => {
   it("normalizes valid Area setup input", () => {
     expect(
@@ -382,5 +522,67 @@ describe("parseIdFormData", () => {
       ok: false,
       error: "A valid setup record is required.",
     });
+  });
+});
+
+describe("Building Inspection Plan entry activity", () => {
+  const activeContext = {
+    areaArchivedAt: null,
+    areaTypeArchivedAt: null,
+    buildingArchivedAt: null,
+    clientArchivedAt: null,
+    inspectionTemplateArchivedAt: null,
+  };
+
+  it("treats fully active archive timestamps as usable", () => {
+    expect(isBuildingInspectionPlanEntryActive(activeContext)).toBe(true);
+  });
+
+  it("treats archived Areas, parents, or Templates as inactive", () => {
+    expect(
+      isBuildingInspectionPlanEntryActive({
+        ...activeContext,
+        inspectionTemplateArchivedAt: new Date("2026-05-28T01:00:00Z"),
+      }),
+    ).toBe(false);
+    expect(
+      isBuildingInspectionPlanEntryActive({
+        ...activeContext,
+        areaArchivedAt: new Date("2026-05-28T01:00:00Z"),
+      }),
+    ).toBe(false);
+  });
+});
+
+describe("summarizeBuildingInspectionPlanEntryCounts", () => {
+  it("reports configured only when at least one entry is active", () => {
+    expect(
+      summarizeBuildingInspectionPlanEntryCounts([
+        { isActive: false },
+        { isActive: false },
+      ]),
+    ).toEqual({
+      entryCount: 2,
+      activeEntryCount: 0,
+      staleEntryCount: 2,
+      isConfigured: false,
+    });
+
+    expect(
+      summarizeBuildingInspectionPlanEntryCounts([{ isActive: true }, { isActive: false }]),
+    ).toEqual({
+      entryCount: 2,
+      activeEntryCount: 1,
+      staleEntryCount: 1,
+      isConfigured: true,
+    });
+  });
+});
+
+describe("BUILDING_INSPECTION_PLAN_ENTRY_SNAPSHOT_CONTRACT", () => {
+  it("documents the non-FK snapshot rule for future inspection persistence", () => {
+    expect(BUILDING_INSPECTION_PLAN_ENTRY_SNAPSHOT_CONTRACT).toContain(
+      "building_inspection_plan_entries.id",
+    );
   });
 });

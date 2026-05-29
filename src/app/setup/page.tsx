@@ -70,6 +70,16 @@ export default async function SetupPage() {
 
           <Link
             className="block rounded-2xl border border-brand-100 bg-brand-50/70 p-5 text-brand-700 transition hover:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100"
+            href="/setup/building-inspection-plans"
+          >
+            <span className="block text-lg font-semibold">Building Inspection Plans</span>
+            <span className="mt-2 block text-sm">
+              Assign active Areas and Inspection Templates used when starting future Draft Inspections.
+            </span>
+          </Link>
+
+          <Link
+            className="block rounded-2xl border border-brand-100 bg-brand-50/70 p-5 text-brand-700 transition hover:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100"
             href="/company-branding"
           >
             <span className="block text-lg font-semibold">Company Branding</span>

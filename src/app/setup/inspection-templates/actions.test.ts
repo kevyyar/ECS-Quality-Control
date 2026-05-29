@@ -206,6 +206,12 @@ describe("Inspection Template setup actions", () => {
     });
     expect(revalidatePath).toHaveBeenCalledWith("/setup");
     expect(revalidatePath).toHaveBeenCalledWith("/setup/inspection-templates");
+    expect(revalidatePath).toHaveBeenCalledWith("/setup/building-inspection-plans");
+    expect(revalidatePath).toHaveBeenCalledWith(
+      "/setup/building-inspection-plans/[buildingId]",
+      "page",
+    );
+    expect(revalidatePath).toHaveBeenCalledWith("/inspections/drafts");
     expect(revalidatePath).toHaveBeenCalledWith(
       `/setup/inspection-templates/${templateRecord.id}`,
     );

@@ -19,6 +19,8 @@ import {
   updateInspectionTemplate,
 } from "@/lib/client-building-setup/repository";
 
+import { revalidateBuildingInspectionPlanViews } from "../building-inspection-plans/revalidation";
+
 export type InspectionTemplateSetupActionState =
   | { status: "idle" }
   | { status: "success"; message: string }
@@ -32,6 +34,7 @@ export type InspectionTemplateSetupActionState =
 function revalidateInspectionTemplateSetupViews(templateId?: string): void {
   revalidatePath("/setup");
   revalidatePath("/setup/inspection-templates");
+  revalidateBuildingInspectionPlanViews();
 
   if (templateId) {
     revalidatePath(`/setup/inspection-templates/${templateId}`);

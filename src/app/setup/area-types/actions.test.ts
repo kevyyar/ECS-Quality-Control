@@ -122,6 +122,12 @@ describe("Area Type setup actions", () => {
     expect(revalidatePath).toHaveBeenCalledWith("/setup/area-types");
     expect(revalidatePath).toHaveBeenCalledWith(`/setup/area-types/${areaTypeRecord.id}`);
     expect(revalidatePath).toHaveBeenCalledWith("/setup/areas");
+    expect(revalidatePath).toHaveBeenCalledWith("/setup/building-inspection-plans");
+    expect(revalidatePath).toHaveBeenCalledWith(
+      "/setup/building-inspection-plans/[buildingId]",
+      "page",
+    );
+    expect(revalidatePath).toHaveBeenCalledWith("/inspections/drafts");
   });
 
   it("updates Area Types by id and revalidates their detail page", async () => {

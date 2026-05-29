@@ -38,6 +38,17 @@ export type InspectionTemplateInput = {
   items: InspectionTemplateItemInput[];
 };
 
+export type BuildingInspectionPlanEntryInput = {
+  areaId: string;
+  inspectionTemplateId: string;
+  position: number;
+};
+
+export type BuildingInspectionPlanInput = {
+  buildingId: string;
+  entries: BuildingInspectionPlanEntryInput[];
+};
+
 export const STARTER_INSPECTION_TEMPLATES: InspectionTemplateInput[] = [
   {
     name: "Restroom",
@@ -206,6 +217,126 @@ export type InspectionTemplateSetupRecord = {
   items: InspectionTemplateItemRecord[];
 };
 
+export type BuildingInspectionPlanEntryRecord = {
+  id: string;
+  planId: string;
+  areaId: string;
+  areaName: string;
+  areaArchivedAt: Date | null;
+  areaTypeArchivedAt: Date | null;
+  inspectionTemplateId: string;
+  inspectionTemplateName: string;
+  inspectionTemplateArchivedAt: Date | null;
+  position: number;
+  createdAt: Date;
+  updatedAt: Date;
+  isAreaActive: boolean;
+  isInspectionTemplateActive: boolean;
+  isActive: boolean;
+};
+
+export type BuildingInspectionPlanRecord = {
+  id: string;
+  buildingId: string;
+  buildingName: string;
+  clientId: string;
+  clientName: string;
+  buildingArchivedAt: Date | null;
+  clientArchivedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+  isBuildingActive: boolean;
+  entries: BuildingInspectionPlanEntryRecord[];
+};
+
+export type BuildingInspectionPlanSummaryRecord = {
+  buildingId: string;
+  buildingName: string;
+  clientId: string;
+  clientName: string;
+  buildingArchivedAt: Date | null;
+  clientArchivedAt: Date | null;
+  planId: string | null;
+  entryCount: number;
+  activeEntryCount: number;
+  staleEntryCount: number;
+  updatedAt: Date | null;
+  /** True when at least one saved Area/template pair is still active and usable. */
+  isConfigured: boolean;
+  isBuildingActive: boolean;
+};
+
+/** Archive timestamps needed to decide whether a saved plan entry is still usable. */
+export type BuildingInspectionPlanEntryActiveContext = {
+  areaArchivedAt: Date | null;
+  areaTypeArchivedAt: Date | null;
+  buildingArchivedAt: Date | null;
+  clientArchivedAt: Date | null;
+  inspectionTemplateArchivedAt: Date | null;
+};
+
+/**
+ * Saved Building Inspection Plan entry rows are replaceable setup configuration.
+ * `saveBuildingInspectionPlan` deletes and reinserts entries on each save, so
+ * `building_inspection_plan_entries.id` values are not stable over time.
+ * Future Draft and Submitted Inspection persistence must copy area names, template
+ * names, and template item content into inspection-owned rows when an inspection
+ * starts or is submitted — never foreign-key to plan entry ids.
+ */
+export const BUILDING_INSPECTION_PLAN_ENTRY_SNAPSHOT_CONTRACT =
+  "Draft and Submitted Inspection records must snapshot plan content at inspection time and must not reference building_inspection_plan_entries.id." as const;
+
+export function isBuildingInspectionPlanEntryAreaActive(
+  context: Pick<
+    BuildingInspectionPlanEntryActiveContext,
+    "areaArchivedAt" | "areaTypeArchivedAt" | "buildingArchivedAt" | "clientArchivedAt"
+  >,
+): boolean {
+  return (
+    context.areaArchivedAt === null &&
+    context.areaTypeArchivedAt === null &&
+    context.buildingArchivedAt === null &&
+    context.clientArchivedAt === null
+  );
+}
+
+export function isBuildingInspectionPlanInspectionTemplateActive(
+  inspectionTemplateArchivedAt: Date | null,
+): boolean {
+  return inspectionTemplateArchivedAt === null;
+}
+
+export function isBuildingInspectionPlanEntryActive(
+  context: BuildingInspectionPlanEntryActiveContext,
+): boolean {
+  return (
+    isBuildingInspectionPlanEntryAreaActive(context) &&
+    isBuildingInspectionPlanInspectionTemplateActive(context.inspectionTemplateArchivedAt)
+  );
+}
+
+export type BuildingInspectionPlanEntryCountSummary = {
+  entryCount: number;
+  activeEntryCount: number;
+  staleEntryCount: number;
+  isConfigured: boolean;
+};
+
+export function summarizeBuildingInspectionPlanEntryCounts(
+  entries: ReadonlyArray<Pick<BuildingInspectionPlanEntryRecord, "isActive">>,
+): BuildingInspectionPlanEntryCountSummary {
+  const entryCount = entries.length;
+  const activeEntryCount = entries.filter((entry) => entry.isActive).length;
+  const staleEntryCount = entryCount - activeEntryCount;
+
+  return {
+    entryCount,
+    activeEntryCount,
+    staleEntryCount,
+    isConfigured: activeEntryCount > 0,
+  };
+}
+
 export type AreaSetupRecord = {
   id: string;
   buildingId: string;
@@ -234,6 +365,8 @@ export type AreaTypeField = keyof AreaTypeInput;
 export type AreaField = keyof AreaInput;
 export type InspectionTemplateField = "name" | "description" | "items";
 export type InspectionTemplateItemField = "name" | "description" | "sectionName";
+export type BuildingInspectionPlanField = "buildingId" | "entries";
+export type BuildingInspectionPlanEntryField = "areaId" | "inspectionTemplateId";
 
 export type ClientFieldErrors = Partial<Record<ClientField, string>>;
 export type BuildingFieldErrors = Partial<Record<BuildingField, string>>;
@@ -244,6 +377,12 @@ export type InspectionTemplateFieldErrors = Partial<
 >;
 export type InspectionTemplateItemFieldErrors = Partial<
   Record<InspectionTemplateItemField, string>
+>;
+export type BuildingInspectionPlanFieldErrors = Partial<
+  Record<BuildingInspectionPlanField, string>
+>;
+export type BuildingInspectionPlanEntryFieldErrors = Partial<
+  Record<BuildingInspectionPlanEntryField, string>
 >;
 
 export type ClientFormValues = Record<ClientField, string>;
@@ -260,6 +399,13 @@ export type InspectionTemplateFormValues = {
     name: string;
     description: string;
     sectionName: string;
+  }>;
+};
+export type BuildingInspectionPlanFormValues = {
+  buildingId: string;
+  entries: Array<{
+    areaId: string;
+    inspectionTemplateId: string;
   }>;
 };
 
@@ -288,6 +434,15 @@ export type InspectionTemplateParseResult =
       values: InspectionTemplateFormValues;
     };
 
+export type BuildingInspectionPlanParseResult =
+  | { ok: true; data: BuildingInspectionPlanInput }
+  | {
+      ok: false;
+      errors: BuildingInspectionPlanFieldErrors;
+      entryErrors: BuildingInspectionPlanEntryFieldErrors[];
+      values: BuildingInspectionPlanFormValues;
+    };
+
 export type BuildingNameParseResult =
   | { ok: true; name: string }
   | { ok: false; error: string; value: string };
@@ -307,6 +462,12 @@ function trimFormValue(formData: FormData, field: string): string {
   const value = formData.get(field);
 
   return typeof value === "string" ? value.trim() : "";
+}
+
+function trimFormValues(formData: FormData, field: string): string[] {
+  return formData
+    .getAll(field)
+    .map((value) => (typeof value === "string" ? value.trim() : ""));
 }
 
 export function isSetupRecordId(value: string): boolean {
@@ -558,6 +719,68 @@ export function parseInspectionTemplateFormData(
       items: values.items.map((item, index) => ({
         ...item,
         sectionName: item.sectionName === "" ? null : item.sectionName,
+        position: index + 1,
+      })),
+    },
+  };
+}
+
+export function parseBuildingInspectionPlanFormData(
+  formData: FormData,
+): BuildingInspectionPlanParseResult {
+  const areaIds = trimFormValues(formData, "areaId");
+  const templateIds = trimFormValues(formData, "inspectionTemplateId");
+  const entryCount = Math.max(areaIds.length, templateIds.length);
+  const values: BuildingInspectionPlanFormValues = {
+    buildingId: trimFormValue(formData, "buildingId"),
+    entries: Array.from({ length: entryCount }, (_, index) => ({
+      areaId: areaIds[index] ?? "",
+      inspectionTemplateId: templateIds[index] ?? "",
+    })),
+  };
+  const errors: BuildingInspectionPlanFieldErrors = {};
+  const entryErrors: BuildingInspectionPlanEntryFieldErrors[] = [];
+  const seenAreaIds = new Set<string>();
+
+  if (!isSetupRecordId(values.buildingId)) {
+    errors.buildingId = "Select an active Building.";
+  }
+
+  if (values.entries.length === 0) {
+    errors.entries = "Add at least one Area/template pair.";
+  }
+
+  values.entries.forEach((entry) => {
+    const errors: BuildingInspectionPlanEntryFieldErrors = {};
+
+    if (!isSetupRecordId(entry.areaId)) {
+      errors.areaId = "Select an active Area.";
+    } else if (seenAreaIds.has(entry.areaId)) {
+      errors.areaId = "Each Area can appear only once in a Building Inspection Plan.";
+    } else {
+      seenAreaIds.add(entry.areaId);
+    }
+
+    if (!isSetupRecordId(entry.inspectionTemplateId)) {
+      errors.inspectionTemplateId = "Select an active Inspection Template.";
+    }
+
+    entryErrors.push(errors);
+  });
+
+  if (
+    Object.keys(errors).length > 0 ||
+    entryErrors.some((entryError) => Object.keys(entryError).length > 0)
+  ) {
+    return { ok: false, errors, entryErrors, values };
+  }
+
+  return {
+    ok: true,
+    data: {
+      buildingId: values.buildingId,
+      entries: values.entries.map((entry, index) => ({
+        ...entry,
         position: index + 1,
       })),
     },
