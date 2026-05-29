@@ -20,6 +20,7 @@ const supervisorOnlyActions = [
 const allProtectedActions = [
   ...supervisorOnlyActions,
   "addCorrectionNote",
+  "viewActiveDraftMetadata",
 ] satisfies ProtectedAction[];
 
 describe("internal user capabilities", () => {
@@ -62,6 +63,7 @@ describe("protected internal actions", () => {
         submitDraftInspection: false,
         closeTicket: false,
         addCorrectionNote: false,
+        viewActiveDraftMetadata: false,
       },
     },
     {
@@ -75,6 +77,7 @@ describe("protected internal actions", () => {
         submitDraftInspection: false,
         closeTicket: false,
         addCorrectionNote: true,
+        viewActiveDraftMetadata: true,
       },
     },
     {
@@ -88,6 +91,7 @@ describe("protected internal actions", () => {
         submitDraftInspection: true,
         closeTicket: true,
         addCorrectionNote: true,
+        viewActiveDraftMetadata: true,
       },
     },
     {
@@ -101,6 +105,7 @@ describe("protected internal actions", () => {
         submitDraftInspection: true,
         closeTicket: true,
         addCorrectionNote: true,
+        viewActiveDraftMetadata: true,
       },
     },
   ] satisfies {

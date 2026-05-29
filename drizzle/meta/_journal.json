@@ -43,6 +43,13 @@
       "when": 1780013537000,
       "tag": "0005_building_inspection_plans",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1780050000000,
+      "tag": "0006_draft_inspections",
+      "breakpoints": true
     }
   ]
 }

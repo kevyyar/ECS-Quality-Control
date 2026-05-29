@@ -269,6 +269,117 @@ export const buildingInspectionPlanEntries = pgTable(
   ],
 ).enableRLS();
 
+export const inspections = pgTable(
+  "inspections",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    status: varchar("status", { length: 24 }).notNull().default("draft"),
+    clientId: uuid("client_id")
+      .notNull()
+      .references(() => clients.id, { onDelete: "restrict" }),
+    buildingId: uuid("building_id")
+      .notNull()
+      .references(() => buildings.id, { onDelete: "restrict" }),
+    clientNameSnapshot: varchar("client_name_snapshot", { length: 160 }).notNull(),
+    buildingNameSnapshot: varchar("building_name_snapshot", { length: 160 }).notNull(),
+    startedByAuthUserId: uuid("started_by_auth_user_id").notNull(),
+    startedByEmail: varchar("started_by_email", { length: 320 }).notNull(),
+    startedAt: timestamp("started_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("inspections_status_idx").on(table.status),
+    index("inspections_building_id_idx").on(table.buildingId),
+    index("inspections_started_at_idx").on(table.startedAt),
+    uniqueIndex("inspections_one_active_draft_per_building")
+      .on(table.buildingId)
+      .where(sql`${table.status} = 'draft'`),
+    check("inspections_status_valid", sql`${table.status} in ('draft', 'submitted')`),
+  ],
+).enableRLS();
+
+export const inspectionAreaInspections = pgTable(
+  "inspection_area_inspections",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    inspectionId: uuid("inspection_id")
+      .notNull()
+      .references(() => inspections.id, { onDelete: "cascade" }),
+    source: varchar("source", { length: 24 }).notNull().default("planned"),
+    position: integer("position").notNull(),
+    areaId: uuid("area_id")
+      .notNull()
+      .references(() => areas.id, { onDelete: "restrict" }),
+    areaTypeId: uuid("area_type_id")
+      .notNull()
+      .references(() => areaTypes.id, { onDelete: "restrict" }),
+    inspectionTemplateId: uuid("inspection_template_id")
+      .notNull()
+      .references(() => inspectionTemplates.id, { onDelete: "restrict" }),
+    areaNameSnapshot: varchar("area_name_snapshot", { length: 160 }).notNull(),
+    areaTypeNameSnapshot: varchar("area_type_name_snapshot", { length: 160 }).notNull(),
+    inspectionTemplateNameSnapshot: varchar("inspection_template_name_snapshot", {
+      length: 160,
+    }).notNull(),
+    inspectionTemplateDescriptionSnapshot: varchar(
+      "inspection_template_description_snapshot",
+      { length: 1000 },
+    ),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("inspection_area_inspections_inspection_id_idx").on(table.inspectionId),
+    uniqueIndex("inspection_area_inspections_inspection_position_unique").on(
+      table.inspectionId,
+      table.position,
+    ),
+    check("inspection_area_inspections_source_valid", sql`${table.source} in ('planned', 'one_off')`),
+    check("inspection_area_inspections_position_positive", sql`${table.position} > 0`),
+  ],
+).enableRLS();
+
+export const inspectionItems = pgTable(
+  "inspection_items",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    areaInspectionId: uuid("area_inspection_id")
+      .notNull()
+      .references(() => inspectionAreaInspections.id, { onDelete: "cascade" }),
+    sourceTemplateItemId: uuid("source_template_item_id"),
+    sourceTemplateSectionId: uuid("source_template_section_id"),
+    position: integer("position").notNull(),
+    sectionNameSnapshot: varchar("section_name_snapshot", { length: 160 }),
+    itemNameSnapshot: varchar("item_name_snapshot", { length: 160 }).notNull(),
+    itemDescriptionSnapshot: varchar("item_description_snapshot", { length: 1000 }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("inspection_items_area_inspection_id_idx").on(table.areaInspectionId),
+    uniqueIndex("inspection_items_area_inspection_position_unique").on(
+      table.areaInspectionId,
+      table.position,
+    ),
+    check("inspection_items_position_positive", sql`${table.position} > 0`),
+  ],
+).enableRLS();
+
 export const internalUsers = pgTable(
   "internal_users",
   {

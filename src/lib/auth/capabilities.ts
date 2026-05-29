@@ -11,6 +11,7 @@ export type ProtectedAction =
   | "configureBranding"
   | "editDraftInspection"
   | "submitDraftInspection"
+  | "viewActiveDraftMetadata"
   | "closeTicket"
   | "addCorrectionNote";
 
@@ -20,6 +21,7 @@ const protectedActionRequirements = {
   configureBranding: ["supervisor"],
   editDraftInspection: ["supervisor"],
   submitDraftInspection: ["supervisor"],
+  viewActiveDraftMetadata: ["manager", "supervisor"],
   closeTicket: ["supervisor"],
   addCorrectionNote: ["manager", "supervisor"],
 } satisfies Record<ProtectedAction, readonly UserCapability[]>;
