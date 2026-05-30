@@ -38,6 +38,7 @@ import {
   isActiveOneOffAreaInspectionSetupRequiredError,
   isDraftInspectionMutationNotAllowedError,
   isDraftInspectionNotFoundError,
+  isDraftSubmissionConfirmationRequiredError,
   isDraftSubmissionValidationError,
   saveDraftInspectionItemResult,
   skipDraftAreaInspection,
@@ -97,6 +98,7 @@ export type SubmitDraftInspectionActionState =
       message: string;
       submittedInspectionId: string;
       ticketCount: number;
+      alreadySubmitted: boolean;
     }
   | (ActionErrorState<DraftInspectionIdentityFormValues, DraftInspectionIdentityFieldErrors> & {
       validation?: DraftSubmissionValidation;
@@ -129,6 +131,18 @@ function draftMutationErrorMessage(error: unknown): string | undefined {
   }
 
   return undefined;
+}
+
+function submittedRetryMessage(ticketCount: number): string {
+  if (ticketCount === 0) {
+    return "Draft Inspection was already submitted. No additional Tickets created.";
+  }
+
+  if (ticketCount === 1) {
+    return "Draft Inspection was already submitted. No additional Tickets created. 1 existing Ticket.";
+  }
+
+  return `Draft Inspection was already submitted. No additional Tickets created. ${ticketCount} existing Tickets.`;
 }
 
 function ticketMessage(ticketCount: number): string {
@@ -367,17 +381,29 @@ export async function submitDraftInspectionAction(
 
     return {
       status: "success",
-      message: ticketMessage(submitted.ticketCount),
+      message: submitted.alreadySubmitted
+        ? submittedRetryMessage(submitted.ticketCount)
+        : ticketMessage(submitted.ticketCount),
       submittedInspectionId: submitted.id,
       ticketCount: submitted.ticketCount,
+      alreadySubmitted: submitted.alreadySubmitted,
     };
   } catch (error) {
     if (isDraftSubmissionValidationError(error)) {
       return {
         status: "error",
         errors: {},
-        values: result.data,
+        values: { inspectionId: result.data.inspectionId },
         validation: error.validation,
+      };
+    }
+
+    if (isDraftSubmissionConfirmationRequiredError(error)) {
+      return {
+        status: "error",
+        errors: {},
+        values: { inspectionId: result.data.inspectionId },
+        formError: "Confirm the skipped planned Area Inspections before final submit.",
       };
     }
 

@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 
 import type {
   DraftAreaInspectionRecord,
   DraftInspectionItemRecord,
+  DraftSubmissionReviewSummary,
   DraftSubmissionValidation,
 } from "@/lib/inspections/drafts/model";
 
@@ -92,6 +93,7 @@ type DraftInspectionEditorProps = {
   draft: DraftEditorDraft;
   activeAreas: DraftEditorAreaOption[];
   activeTemplates: DraftEditorTemplateOption[];
+  submissionReview: DraftSubmissionReviewSummary;
 };
 
 function FieldError({ message }: { message: string | undefined }) {
@@ -259,6 +261,132 @@ function SubmissionValidationSummary({
           ));
         })}
       </ul>
+    </div>
+  );
+}
+
+function SubmissionReviewPanel({
+  review,
+  draft,
+}: {
+  review: DraftSubmissionReviewSummary;
+  draft: DraftEditorDraft;
+}) {
+  const resultCounts = [
+    { label: "Pass", value: review.resultCounts.pass },
+    { label: "Fail", value: review.resultCounts.fail },
+    { label: "N/A", value: review.resultCounts.notApplicable },
+    { label: "Unanswered", value: review.resultCounts.unanswered },
+  ];
+
+  return (
+    <div className="space-y-5 rounded-2xl border border-slate-200 bg-slate-50 p-5">
+      <div>
+        <h3 className="text-lg font-semibold text-slate-950">Pre-submit review</h3>
+        <p className="mt-1 text-sm text-muted-ink">
+          Review what will become the Submitted Inspection. The server will validate again
+          when you submit.
+        </p>
+      </div>
+
+      <dl className="grid gap-3 sm:grid-cols-4">
+        {resultCounts.map((count) => (
+          <div className="rounded-xl bg-white p-3" key={count.label}>
+            <dt className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+              {count.label}
+            </dt>
+            <dd className="mt-1 text-2xl font-bold text-slate-950">{count.value}</dd>
+          </div>
+        ))}
+      </dl>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <section className="space-y-2 rounded-xl bg-white p-4" aria-labelledby="completed-areas-heading">
+          <h4 id="completed-areas-heading" className="font-semibold text-slate-950">
+            Completed Area Inspections included in submission
+          </h4>
+          {review.completedAreaInspections.length === 0 ? (
+            <p className="text-sm text-muted-ink">No completed Area Inspections yet.</p>
+          ) : (
+            <ul className="list-disc space-y-1 pl-5 text-sm text-slate-700">
+              {review.completedAreaInspections.map((area) => (
+                <li key={area.id}>
+                  {area.areaName} ({area.source === "one_off" ? "one-off" : "planned"})
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        <section className="space-y-2 rounded-xl bg-white p-4" aria-labelledby="skipped-areas-heading">
+          <h4 id="skipped-areas-heading" className="font-semibold text-slate-950">
+            Skipped Area Inspections
+          </h4>
+          {review.skippedAreaInspections.length === 0 ? (
+            <p className="text-sm text-muted-ink">No Area Inspections are skipped.</p>
+          ) : (
+            <ul className="space-y-2 text-sm text-slate-700">
+              {review.skippedAreaInspections.map((area) => (
+                <li key={area.id}>
+                  <span className="font-medium text-slate-950">{area.areaName}:</span>{" "}
+                  {area.skipReason || "Missing skip reason"}
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        <section className="space-y-2 rounded-xl bg-white p-4" aria-labelledby="one-off-areas-heading">
+          <h4 id="one-off-areas-heading" className="font-semibold text-slate-950">
+            One-off Area Inspections
+          </h4>
+          {review.oneOffAreaInspections.length === 0 ? (
+            <p className="text-sm text-muted-ink">No one-off Area Inspections were added.</p>
+          ) : (
+            <ul className="list-disc space-y-1 pl-5 text-sm text-slate-700">
+              {review.oneOffAreaInspections.map((area) => (
+                <li key={area.id}>{area.areaName}</li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        <section className="space-y-2 rounded-xl bg-white p-4" aria-labelledby="tickets-heading">
+          <h4 id="tickets-heading" className="font-semibold text-slate-950">
+            Tickets that will be created after successful submission
+          </h4>
+          {review.ticketsToCreate.length === 0 ? (
+            <p className="text-sm text-muted-ink">No failed items are planned to create Tickets.</p>
+          ) : (
+            <ul className="list-disc space-y-1 pl-5 text-sm text-slate-700">
+              {review.ticketsToCreate.map((ticket) => (
+                <li key={ticket.inspectionItemId}>{ticket.title}</li>
+              ))}
+            </ul>
+          )}
+        </section>
+      </div>
+
+      {review.hasSkippedPlannedAreaInspections ? (
+        <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-950">
+          Warning: planned Area Inspections are skipped. Submitting confirms those planned
+          areas were intentionally skipped for the reasons shown above, and no inspection
+          items or Tickets will be created for them.
+        </p>
+      ) : null}
+
+      <section className="space-y-2" aria-labelledby="validation-blockers-heading">
+        <h4 id="validation-blockers-heading" className="font-semibold text-slate-950">
+          Validation blockers
+        </h4>
+        {review.validation.ok ? (
+          <p className="rounded-xl border border-brand-100 bg-brand-50 px-4 py-3 text-sm font-medium text-brand-700">
+            No validation blockers detected. Final submit will run server validation again.
+          </p>
+        ) : (
+          <SubmissionValidationSummary validation={review.validation} draft={draft} />
+        )}
+      </section>
     </div>
   );
 }
@@ -544,19 +672,38 @@ function AddOneOffAreaInspectionForm({
   );
 }
 
-function SubmitDraftInspectionForm({ draft }: { draft: DraftEditorDraft }) {
+function SubmitDraftInspectionForm({
+  draft,
+  submissionReview,
+}: {
+  draft: DraftEditorDraft;
+  submissionReview: DraftSubmissionReviewSummary;
+}) {
   const [state, formAction, isPending] = useActionState(
     submitDraftInspectionAction,
     submitInitialState,
   );
+  const [skippedAreaSubmissionConfirmed, setSkippedAreaSubmissionConfirmed] =
+    useState(false);
+  const hasValidationBlockers = !submissionReview.validation.ok;
+  const requiresSkippedAreaConfirmation =
+    submissionReview.hasSkippedPlannedAreaInspections;
+  const canSubmit =
+    !isPending &&
+    !hasValidationBlockers &&
+    (!requiresSkippedAreaConfirmation || skippedAreaSubmissionConfirmed);
 
   return (
-    <form action={formAction} className="space-y-3 rounded-2xl border border-slate-200 p-5">
+    <form action={formAction} className="space-y-4 rounded-2xl border border-slate-200 p-5">
       <input name="inspectionId" type="hidden" value={draft.id} />
-      <h2 className="text-xl font-semibold text-slate-950">Submit Draft Inspection</h2>
-      <p className="text-sm text-muted-ink">
-        Submit only when all non-skipped items are answered. Failed items need an issue note.
-      </p>
+      <div>
+        <h2 className="text-xl font-semibold text-slate-950">Submit Draft Inspection</h2>
+        <p className="mt-1 text-sm text-muted-ink">
+          Submit only after reviewing the summary. Failed items need an issue note and at
+          least one Before Photo.
+        </p>
+      </div>
+      <SubmissionReviewPanel draft={draft} review={submissionReview} />
       {state.status === "error" ? (
         <>
           <FieldError message={state.errors.inspectionId} />
@@ -569,12 +716,41 @@ function SubmitDraftInspectionForm({ draft }: { draft: DraftEditorDraft }) {
           Back to active Draft Inspections
         </Link>
       ) : null}
+      {requiresSkippedAreaConfirmation ? (
+        <label className="flex gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-950">
+          <input
+            checked={skippedAreaSubmissionConfirmed}
+            className="mt-1 h-4 w-4 rounded border-amber-400 text-brand-700 focus:ring-brand-100"
+            name="confirmSkippedPlannedAreas"
+            onChange={(event) => setSkippedAreaSubmissionConfirmed(event.target.checked)}
+            type="checkbox"
+          />
+          <span>
+            I confirm the skipped planned Area Inspections and reasons above are correct.
+            I understand skipped planned areas will not create inspection items or Tickets.
+          </span>
+        </label>
+      ) : null}
+      {hasValidationBlockers ? (
+        <p className="text-sm font-medium text-red-700">
+          Resolve the validation blockers above before submitting.
+        </p>
+      ) : null}
+      {requiresSkippedAreaConfirmation && !skippedAreaSubmissionConfirmed ? (
+        <p className="text-sm font-medium text-amber-900">
+          Confirm the skipped planned Area Inspections before final submit.
+        </p>
+      ) : null}
       <button
         className="rounded-xl bg-brand-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100 disabled:cursor-not-allowed disabled:opacity-60"
-        disabled={isPending}
+        disabled={!canSubmit}
         type="submit"
       >
-        {isPending ? "Submitting…" : "Submit Draft Inspection"}
+        {isPending
+          ? "Submitting…"
+          : submissionReview.hasSkippedPlannedAreaInspections
+            ? "Submit and confirm skipped planned areas"
+            : "Submit Draft Inspection"}
       </button>
     </form>
   );
@@ -615,6 +791,7 @@ export function DraftInspectionEditor({
   draft,
   activeAreas,
   activeTemplates,
+  submissionReview,
 }: DraftInspectionEditorProps) {
   return (
     <div className="space-y-8">
@@ -647,7 +824,7 @@ export function DraftInspectionEditor({
       />
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <SubmitDraftInspectionForm draft={draft} />
+        <SubmitDraftInspectionForm draft={draft} submissionReview={submissionReview} />
         <DiscardDraftInspectionForm inspectionId={draft.id} />
       </div>
     </div>

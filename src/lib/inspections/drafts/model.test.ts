@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   isReportableInspectionStatus,
+  summarizeDraftInspectionForSubmission,
   parseAddOneOffAreaInspectionFormData,
   parseDiscardDraftInspectionFormData,
   parseSaveDraftInspectionItemResultFormData,
@@ -171,7 +172,15 @@ describe("Draft Inspection model", () => {
     ).toEqual({ ok: true, data: { inspectionId, areaId, inspectionTemplateId: templateId } });
     expect(parseSubmitDraftInspectionFormData(formData({ inspectionId }))).toEqual({
       ok: true,
-      data: { inspectionId },
+      data: { inspectionId, confirmSkippedPlannedAreas: false },
+    });
+    expect(
+      parseSubmitDraftInspectionFormData(
+        formData({ inspectionId, confirmSkippedPlannedAreas: "on" }),
+      ),
+    ).toEqual({
+      ok: true,
+      data: { inspectionId, confirmSkippedPlannedAreas: true },
     });
     expect(parseDiscardDraftInspectionFormData(formData({ inspectionId }))).toEqual({
       ok: true,
@@ -300,6 +309,95 @@ describe("Draft Inspection model", () => {
         areaInspections: {
           [oneOffAreaInspectionId]: ["Only planned Area Inspections can be skipped."],
         },
+      },
+    });
+  });
+
+  it("summarizes Draft Inspection submission review details", () => {
+    const draft = validDraft();
+    const failedItemId = "20202020-2020-4202-8202-202020202020";
+    const unansweredItemId = "30303030-3030-4303-8303-303030303030";
+    const skippedAreaInspectionId = "40404040-4040-4404-8404-404040404040";
+
+    draft.areaInspections[0]!.items = [
+      draft.areaInspections[0]!.items[0]!,
+      {
+        ...draft.areaInspections[0]!.items[0]!,
+        id: failedItemId,
+        itemNameSnapshot: "Soap dispenser",
+        resultStatus: "fail",
+        resultNote: "Empty",
+        beforePhotos: [
+          {
+            id: "50505050-5050-4505-8505-505050505050",
+            inspectionItemId: failedItemId,
+            evidenceType: "before_photo",
+            storagePath: "inspections/drafts/soap.jpg",
+            uploadedByAuthUserId: "99999999-9999-4999-8999-999999999999",
+            uploadedAt: new Date("2026-05-29T15:00:00Z"),
+          },
+        ],
+      },
+      {
+        ...draft.areaInspections[0]!.items[0]!,
+        id: unansweredItemId,
+        itemNameSnapshot: "Trash bins",
+        resultStatus: null,
+      },
+    ];
+    draft.areaInspections.push(
+      {
+        ...draft.areaInspections[0]!,
+        id: skippedAreaInspectionId,
+        source: "planned",
+        areaNameSnapshot: "Second Floor Restroom",
+        isSkipped: true,
+        skipReason: "Building contact denied access",
+        items: [{ ...draft.areaInspections[0]!.items[0]!, id: oneOffItemId, resultStatus: null }],
+      },
+      {
+        ...draft.areaInspections[0]!,
+        id: oneOffAreaInspectionId,
+        source: "one_off",
+        areaNameSnapshot: "Lobby Spill",
+        isSkipped: false,
+        skipReason: null,
+        items: [
+          {
+            ...draft.areaInspections[0]!.items[0]!,
+            id: oneOffItemId,
+            areaInspectionId: oneOffAreaInspectionId,
+            itemNameSnapshot: "Wet floor sign",
+            resultStatus: "not_applicable",
+          },
+        ],
+      },
+    );
+
+    expect(summarizeDraftInspectionForSubmission(draft)).toEqual({
+      completedAreaInspections: [
+        { id: oneOffAreaInspectionId, areaName: "Lobby Spill", source: "one_off" },
+      ],
+      skippedAreaInspections: [
+        {
+          id: skippedAreaInspectionId,
+          areaName: "Second Floor Restroom",
+          skipReason: "Building contact denied access",
+        },
+      ],
+      oneOffAreaInspections: [{ id: oneOffAreaInspectionId, areaName: "Lobby Spill" }],
+      resultCounts: { pass: 1, fail: 1, notApplicable: 1, unanswered: 1 },
+      ticketsToCreate: [
+        {
+          inspectionItemId: failedItemId,
+          areaInspectionId,
+          title: "First Floor Restroom — Soap dispenser",
+        },
+      ],
+      hasSkippedPlannedAreaInspections: true,
+      validation: {
+        ok: false,
+        errors: { items: { [unansweredItemId]: ["Answer this item before submitting."] } },
       },
     });
   });

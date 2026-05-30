@@ -45,6 +45,7 @@ const {
   ActiveDraftInspectionAlreadyExistsError,
   DraftInspectionMutationNotAllowedError,
   DraftInspectionNotFoundError,
+  DraftSubmissionConfirmationRequiredError,
   DraftSubmissionValidationError,
   addDraftInspectionItemBeforePhoto,
   addOneOffAreaInspection,
@@ -649,6 +650,7 @@ describe("Draft Inspection repository", () => {
       2,
       expect.objectContaining({ resultStatus: null, resultNote: null }),
     );
+    expect(deleteWhere).toHaveBeenCalledTimes(1);
   });
 
   it("rejects skipping one-off Area Inspections", async () => {
@@ -770,7 +772,10 @@ describe("Draft Inspection repository", () => {
     ]);
 
     await expect(
-      submitDraftInspection({ inspectionId: savedInspectionRow.id }, starter),
+      submitDraftInspection(
+        { inspectionId: savedInspectionRow.id, confirmSkippedPlannedAreas: false },
+        starter,
+      ),
     ).rejects.toBeInstanceOf(DraftSubmissionValidationError);
     expect(updateSet).not.toHaveBeenCalled();
     expect(insertValues).not.toHaveBeenCalled();
@@ -803,13 +808,61 @@ describe("Draft Inspection repository", () => {
       },
     ]);
 
+    selectOrderBy.mockResolvedValueOnce([]);
+
     await expect(
-      submitDraftInspection({ inspectionId: savedInspectionRow.id }, starter),
-    ).resolves.toEqual({ id: savedInspectionRow.id, status: "submitted", ticketCount: 0 });
+      submitDraftInspection(
+        { inspectionId: savedInspectionRow.id, confirmSkippedPlannedAreas: true },
+        starter,
+      ),
+    ).resolves.toEqual({
+      id: savedInspectionRow.id,
+      status: "submitted",
+      ticketCount: 0,
+      alreadySubmitted: false,
+    });
 
     expect(updateSet).toHaveBeenCalledWith(
       expect.objectContaining({ status: "submitted" }),
     );
+    expect(insertValues).not.toHaveBeenCalled();
+  });
+
+  it("requires confirmation before submitting skipped planned Area Inspections", async () => {
+    const skippedAreaInspectionId = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+
+    selectLimit.mockResolvedValueOnce([savedInspectionRow]);
+    selectOrderBy.mockResolvedValueOnce([
+      {
+        inspection: savedInspectionRow,
+        areaInspection: savedAreaInspectionRow,
+        item: { ...savedInspectionItemRow, resultStatus: "not_applicable" },
+      },
+      {
+        inspection: savedInspectionRow,
+        areaInspection: {
+          ...savedAreaInspectionRow,
+          id: skippedAreaInspectionId,
+          isSkipped: true,
+          skipReason: "Area unavailable",
+        },
+        item: {
+          ...savedInspectionItemRow,
+          id: "ffffffff-ffff-4fff-8fff-ffffffffffff",
+          areaInspectionId: skippedAreaInspectionId,
+          resultStatus: null,
+        },
+      },
+    ]);
+
+    await expect(
+      submitDraftInspection(
+        { inspectionId: savedInspectionRow.id, confirmSkippedPlannedAreas: false },
+        starter,
+      ),
+    ).rejects.toBeInstanceOf(DraftSubmissionConfirmationRequiredError);
+
+    expect(updateSet).not.toHaveBeenCalled();
     expect(insertValues).not.toHaveBeenCalled();
   });
 
@@ -828,9 +881,19 @@ describe("Draft Inspection repository", () => {
       },
     ]);
 
+    selectOrderBy.mockResolvedValueOnce([{ id: "12121212-1212-4121-8121-121212121212" }]);
+
     await expect(
-      submitDraftInspection({ inspectionId: savedInspectionRow.id }, starter),
-    ).resolves.toEqual({ id: savedInspectionRow.id, status: "submitted", ticketCount: 1 });
+      submitDraftInspection(
+        { inspectionId: savedInspectionRow.id, confirmSkippedPlannedAreas: false },
+        starter,
+      ),
+    ).resolves.toEqual({
+      id: savedInspectionRow.id,
+      status: "submitted",
+      ticketCount: 1,
+      alreadySubmitted: false,
+    });
 
     expect(updateSet).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -848,6 +911,30 @@ describe("Draft Inspection repository", () => {
         title: `${savedAreaInspectionRow.areaNameSnapshot} — ${savedInspectionItemRow.itemNameSnapshot}`,
       }),
     ]);
+    expect(insertValues.mock.calls.at(-1)?.[0][0]).not.toHaveProperty("ticketNumber");
+  });
+
+  it("treats already-submitted inspections as successful retries without duplicate Tickets", async () => {
+    selectLimit.mockResolvedValueOnce([submittedInspectionRow]);
+    selectOrderBy.mockResolvedValueOnce([
+      { id: "12121212-1212-4121-8121-121212121212" },
+      { id: "23232323-2323-4232-8232-232323232323" },
+    ]);
+
+    await expect(
+      submitDraftInspection(
+        { inspectionId: submittedInspectionRow.id, confirmSkippedPlannedAreas: false },
+        starter,
+      ),
+    ).resolves.toEqual({
+      id: submittedInspectionRow.id,
+      status: "submitted",
+      ticketCount: 2,
+      alreadySubmitted: true,
+    });
+
+    expect(updateSet).not.toHaveBeenCalled();
+    expect(insertValues).not.toHaveBeenCalled();
   });
 
   it("discards Draft Inspections by deleting the draft root row", async () => {

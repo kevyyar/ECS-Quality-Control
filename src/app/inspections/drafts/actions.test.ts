@@ -21,6 +21,7 @@ const {
   isActiveOneOffAreaInspectionSetupRequiredError,
   isDraftInspectionMutationNotAllowedError,
   isDraftInspectionNotFoundError,
+  isDraftSubmissionConfirmationRequiredError,
   isDraftSubmissionValidationError,
 } = vi.hoisted(() => ({
   revalidatePath: vi.fn(),
@@ -52,6 +53,8 @@ const {
     error instanceof Error && error.name === "DraftInspectionMutationNotAllowedError",
   isDraftInspectionNotFoundError: (error: unknown) =>
     error instanceof Error && error.name === "DraftInspectionNotFoundError",
+  isDraftSubmissionConfirmationRequiredError: (error: unknown) =>
+    error instanceof Error && error.name === "DraftSubmissionConfirmationRequiredError",
   isDraftSubmissionValidationError: (
     error: unknown,
   ): error is Error & { validation: { ok: false; errors: { inspection?: string } } } =>
@@ -84,6 +87,7 @@ vi.mock("@/lib/inspections/drafts/repository", () => ({
   isActiveOneOffAreaInspectionSetupRequiredError,
   isDraftInspectionMutationNotAllowedError,
   isDraftInspectionNotFoundError,
+  isDraftSubmissionConfirmationRequiredError,
   isDraftSubmissionValidationError,
 }));
 
@@ -221,6 +225,7 @@ describe("Draft Inspection actions", () => {
       id: draftInspectionId,
       status: "submitted",
       ticketCount: 1,
+      alreadySubmitted: false,
     });
     discardDraftInspection.mockResolvedValue({ discardedInspectionId: draftInspectionId });
   });
@@ -555,13 +560,35 @@ describe("Draft Inspection actions", () => {
       message: "Draft Inspection submitted. 1 Ticket created.",
       submittedInspectionId: draftInspectionId,
       ticketCount: 1,
+      alreadySubmitted: false,
     });
 
     expect(requireProtectedAction).toHaveBeenCalledWith("submitDraftInspection");
     expect(submitDraftInspection).toHaveBeenCalledWith(
-      { inspectionId: draftInspectionId },
+      { inspectionId: draftInspectionId, confirmSkippedPlannedAreas: false },
       supervisor,
     );
+    expect(revalidatePath).toHaveBeenCalledWith(`/inspections/drafts/${draftInspectionId}`);
+  });
+
+  it("maps already-submitted retries to a success message", async () => {
+    submitDraftInspection.mockResolvedValueOnce({
+      id: draftInspectionId,
+      status: "submitted",
+      ticketCount: 2,
+      alreadySubmitted: true,
+    });
+
+    await expect(
+      submitDraftInspectionAction({ status: "idle" }, validDraftIdentityFormData()),
+    ).resolves.toEqual({
+      status: "success",
+      message: "Draft Inspection was already submitted. No additional Tickets created. 2 existing Tickets.",
+      submittedInspectionId: draftInspectionId,
+      ticketCount: 2,
+      alreadySubmitted: true,
+    });
+
     expect(revalidatePath).toHaveBeenCalledWith(`/inspections/drafts/${draftInspectionId}`);
   });
 
@@ -578,6 +605,23 @@ describe("Draft Inspection actions", () => {
         ok: false,
         errors: { inspection: "Submit at least one non-skipped Area Inspection." },
       },
+    });
+
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("returns an error when skipped planned Area confirmation is missing", async () => {
+    const error = new Error("confirmation required");
+    error.name = "DraftSubmissionConfirmationRequiredError";
+    submitDraftInspection.mockRejectedValueOnce(error);
+
+    await expect(
+      submitDraftInspectionAction({ status: "idle" }, validDraftIdentityFormData()),
+    ).resolves.toEqual({
+      status: "error",
+      errors: {},
+      values: { inspectionId: draftInspectionId },
+      formError: "Confirm the skipped planned Area Inspections before final submit.",
     });
 
     expect(revalidatePath).not.toHaveBeenCalled();

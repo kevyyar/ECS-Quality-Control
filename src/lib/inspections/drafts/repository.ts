@@ -2,6 +2,7 @@ import "server-only";
 
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 
+import type { db as appDb } from "@/db/client";
 import {
   areas,
   areaTypes,
@@ -163,6 +164,19 @@ export function isDraftSubmissionValidationError(
   error: unknown,
 ): error is DraftSubmissionValidationError {
   return error instanceof DraftSubmissionValidationError;
+}
+
+export class DraftSubmissionConfirmationRequiredError extends Error {
+  constructor() {
+    super("Confirm skipped planned Area Inspections before submitting.");
+    this.name = "DraftSubmissionConfirmationRequiredError";
+  }
+}
+
+export function isDraftSubmissionConfirmationRequiredError(
+  error: unknown,
+): error is DraftSubmissionConfirmationRequiredError {
+  return error instanceof DraftSubmissionConfirmationRequiredError;
 }
 
 export class ActiveOneOffAreaInspectionSetupRequiredError extends Error {
@@ -841,6 +855,13 @@ export async function skipDraftAreaInspection(
         updatedAt: sql`now()`,
       })
       .where(eq(inspectionAreaInspections.id, input.areaInspectionId));
+    await tx.delete(inspectionItemEvidence).where(sql`
+      ${inspectionItemEvidence.inspectionItemId} in (
+        select ${inspectionItems.id}
+        from ${inspectionItems}
+        where ${inspectionItems.areaInspectionId} = ${input.areaInspectionId}
+      )
+    `);
     await tx
       .update(inspectionItems)
       .set({ resultStatus: null, resultNote: null, updatedAt: sql`now()` })
@@ -1035,7 +1056,21 @@ export type SubmittedDraftInspectionResult = {
   id: string;
   status: "submitted";
   ticketCount: number;
+  alreadySubmitted: boolean;
 };
+
+async function countSubmittedInspectionTickets(
+  tx: Pick<typeof appDb, "select">,
+  inspectionId: string,
+): Promise<number> {
+  const ticketRows = await tx
+    .select({ id: tickets.id })
+    .from(tickets)
+    .where(eq(tickets.inspectionId, inspectionId))
+    .orderBy(asc(tickets.ticketNumber));
+
+  return ticketRows.length;
+}
 
 export async function submitDraftInspection(
   input: SubmitDraftInspectionInput,
@@ -1051,11 +1086,24 @@ export async function submitDraftInspection(
     const [inspection] = await tx
       .select()
       .from(inspections)
-      .where(and(eq(inspections.id, input.inspectionId), eq(inspections.status, "draft")))
+      .where(eq(inspections.id, input.inspectionId))
       .for("update")
       .limit(1);
 
     if (!inspection) {
+      throw new DraftInspectionNotFoundError();
+    }
+
+    if (inspection.status === "submitted") {
+      return {
+        id: input.inspectionId,
+        status: "submitted",
+        ticketCount: await countSubmittedInspectionTickets(tx, input.inspectionId),
+        alreadySubmitted: true,
+      };
+    }
+
+    if (inspection.status !== "draft") {
       throw new DraftInspectionNotFoundError();
     }
 
@@ -1091,6 +1139,18 @@ export async function submitDraftInspection(
 
     if (!validation.ok) {
       throw new DraftSubmissionValidationError(validation);
+    }
+
+    const hasSkippedPlannedAreaInspections = draft.areaInspections.some(
+      (areaInspection) =>
+        areaInspection.source === "planned" && areaInspection.isSkipped,
+    );
+
+    if (
+      hasSkippedPlannedAreaInspections &&
+      !input.confirmSkippedPlannedAreas
+    ) {
+      throw new DraftSubmissionConfirmationRequiredError();
     }
 
     await tx
@@ -1129,7 +1189,12 @@ export async function submitDraftInspection(
       await tx.insert(tickets).values(ticketInputs);
     }
 
-    return { id: input.inspectionId, status: "submitted", ticketCount: ticketInputs.length };
+    return {
+      id: input.inspectionId,
+      status: "submitted",
+      ticketCount: await countSubmittedInspectionTickets(tx, input.inspectionId),
+      alreadySubmitted: false,
+    };
   });
 }
 

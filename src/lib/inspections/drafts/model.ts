@@ -42,6 +42,7 @@ export type AddOneOffAreaInspectionInput = {
 
 export type SubmitDraftInspectionInput = {
   inspectionId: string;
+  confirmSkippedPlannedAreas: boolean;
 };
 
 export type AddDraftInspectionItemBeforePhotoInput = {
@@ -247,6 +248,42 @@ export type DraftSubmissionValidation = {
   };
 };
 
+export type DraftSubmissionReviewAreaSummary = {
+  id: string;
+  areaName: string;
+};
+
+export type DraftSubmissionReviewCompletedAreaSummary =
+  DraftSubmissionReviewAreaSummary & {
+    source: AreaInspectionSource;
+  };
+
+export type DraftSubmissionReviewSkippedAreaSummary =
+  DraftSubmissionReviewAreaSummary & {
+    skipReason: string;
+  };
+
+export type DraftSubmissionReviewTicketSummary = {
+  inspectionItemId: string;
+  areaInspectionId: string;
+  title: string;
+};
+
+export type DraftSubmissionReviewSummary = {
+  completedAreaInspections: DraftSubmissionReviewCompletedAreaSummary[];
+  skippedAreaInspections: DraftSubmissionReviewSkippedAreaSummary[];
+  oneOffAreaInspections: DraftSubmissionReviewAreaSummary[];
+  resultCounts: {
+    pass: number;
+    fail: number;
+    notApplicable: number;
+    unanswered: number;
+  };
+  ticketsToCreate: DraftSubmissionReviewTicketSummary[];
+  hasSkippedPlannedAreaInspections: boolean;
+  validation: DraftSubmissionValidation;
+};
+
 function trimFormValue(formData: FormData, field: string): string {
   const value = formData.get(field);
   return typeof value === "string" ? value.trim() : "";
@@ -444,7 +481,21 @@ function parseDraftInspectionIdentity<TInput extends DraftInspectionIdentityForm
 export function parseSubmitDraftInspectionFormData(
   formData: FormData,
 ): DraftInspectionIdentityParseResult<SubmitDraftInspectionInput> {
-  return parseDraftInspectionIdentity<SubmitDraftInspectionInput>(formData);
+  const result = parseDraftInspectionIdentity<Pick<SubmitDraftInspectionInput, "inspectionId">>(
+    formData,
+  );
+
+  if (!result.ok) {
+    return result;
+  }
+
+  return {
+    ok: true,
+    data: {
+      inspectionId: result.data.inspectionId,
+      confirmSkippedPlannedAreas: formData.get("confirmSkippedPlannedAreas") === "on",
+    },
+  };
 }
 
 export function parseDiscardDraftInspectionFormData(
@@ -530,6 +581,74 @@ export function validateDraftInspectionForSubmission(
   });
 
   return { ok: Object.keys(errors).length === 0, errors };
+}
+
+export function summarizeDraftInspectionForSubmission(
+  draft: DraftInspectionRecord,
+): DraftSubmissionReviewSummary {
+  const summary: DraftSubmissionReviewSummary = {
+    completedAreaInspections: [],
+    skippedAreaInspections: [],
+    oneOffAreaInspections: [],
+    resultCounts: { pass: 0, fail: 0, notApplicable: 0, unanswered: 0 },
+    ticketsToCreate: [],
+    hasSkippedPlannedAreaInspections: false,
+    validation: validateDraftInspectionForSubmission(draft),
+  };
+
+  draft.areaInspections.forEach((areaInspection) => {
+    const areaSummary = {
+      id: areaInspection.id,
+      areaName: areaInspection.areaNameSnapshot,
+    };
+
+    if (areaInspection.source === "one_off") {
+      summary.oneOffAreaInspections.push(areaSummary);
+    }
+
+    if (areaInspection.isSkipped) {
+      summary.skippedAreaInspections.push({
+        ...areaSummary,
+        skipReason: areaInspection.skipReason ?? "",
+      });
+
+      if (areaInspection.source === "planned") {
+        summary.hasSkippedPlannedAreaInspections = true;
+      }
+
+      return;
+    }
+
+    const isCompletedAreaInspection =
+      areaInspection.items.length > 0 &&
+      areaInspection.items.every((item) => item.resultStatus !== null);
+
+    if (isCompletedAreaInspection) {
+      summary.completedAreaInspections.push({
+        ...areaSummary,
+        source: areaInspection.source,
+      });
+    }
+
+    areaInspection.items.forEach((item) => {
+      if (item.resultStatus === "pass") {
+        summary.resultCounts.pass += 1;
+      } else if (item.resultStatus === "fail") {
+        summary.resultCounts.fail += 1;
+        summary.ticketsToCreate.push({
+          inspectionItemId: item.id,
+          areaInspectionId: areaInspection.id,
+          title: `${areaInspection.areaNameSnapshot} — ${item.itemNameSnapshot}`,
+        });
+      } else if (item.resultStatus === "not_applicable") {
+        summary.resultCounts.notApplicable += 1;
+      } else {
+        summary.resultCounts.unanswered += 1;
+      }
+    });
+  });
+
+  return summary;
 }
 
 export function isReportableInspectionStatus(status: InspectionStatus): boolean {
