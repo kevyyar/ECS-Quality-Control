@@ -1,2 +1,4 @@
--- Local development seed data goes here.
--- Keep production data and secrets out of this file.
+-- Local development only. Do not use this file to initialize staging or production.
+-- Keep production data, credentials, Auth UUIDs, and storage paths out of this file.
+-- This file intentionally has no starter inserts today; migrations own starter records.
+-- Future local seed data must be idempotent so repeated resets do not duplicate records.

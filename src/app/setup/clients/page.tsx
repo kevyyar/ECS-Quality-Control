@@ -6,7 +6,7 @@ import { listClients } from "@/lib/client-building-setup/repository";
 import { ClientCreateForm } from "./client-form";
 
 type ClientsPageProps = {
-  searchParams?: Promise<{ includeArchived?: string }>;
+  searchParams?: Promise<{ includeArchived?: string; q?: string }>;
 };
 
 function statusLabel(isArchived: boolean): string {
@@ -20,6 +20,7 @@ export default async function ClientsPage({ searchParams }: ClientsPageProps) {
   const includeArchived = params?.includeArchived === "1";
   const clients = await listClients({
     visibility: includeArchived ? "historical" : "active",
+    search: params?.q,
   });
 
   return (
@@ -41,6 +42,22 @@ export default async function ClientsPage({ searchParams }: ClientsPageProps) {
         </div>
 
         <ClientCreateForm />
+
+        <form className="flex flex-col gap-3 rounded-2xl border border-slate-200 p-5 sm:flex-row sm:items-end">
+          <label className="flex-1 space-y-2" htmlFor="client-search">
+            <span className="text-sm font-semibold text-slate-900">Search Clients by name</span>
+            <input
+              className="w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-950 shadow-sm focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100"
+              defaultValue={params?.q ?? ""}
+              id="client-search"
+              name="q"
+              type="search"
+            />
+          </label>
+          {includeArchived ? <input name="includeArchived" type="hidden" value="1" /> : null}
+          <button className="rounded-xl bg-brand-700 px-5 py-3 text-sm font-semibold text-white shadow-sm hover:bg-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100" type="submit">Search</button>
+          <Link className="py-3 text-sm font-semibold text-brand-700" href={includeArchived ? "/setup/clients?includeArchived=1" : "/setup/clients"}>Clear</Link>
+        </form>
 
         <div className="space-y-4">
           <div className="flex items-center justify-between gap-4">

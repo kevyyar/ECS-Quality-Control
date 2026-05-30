@@ -96,11 +96,12 @@ type AreaWithParentsRow = {
 
 type ListOptions = {
   visibility?: SetupVisibility;
+  search?: string | undefined;
 };
 
 type ListBuildingOptions = ListOptions & {
-  clientId?: string;
-  buildingId?: string;
+  clientId?: string | undefined;
+  buildingId?: string | undefined;
 };
 
 function combineConditions(conditions: SQL[]): SQL | undefined {
@@ -113,6 +114,16 @@ function combineConditions(conditions: SQL[]): SQL | undefined {
   return rest.length === 0 ? first : (and(first, ...rest) ?? first);
 }
 
+function searchTerm(value: string | undefined): string | null {
+  const term = value?.trim();
+
+  return term ? `%${term.replace(/[\\%_]/g, "\\$&")}%` : null;
+}
+
+function nameContains(column: SQL, pattern: string): SQL {
+  return sql`${column} ilike ${pattern} escape '\\'`;
+}
+
 function buildingConditions(options: ListBuildingOptions): SQL | undefined {
   const visibility = options.visibility ?? "active";
   const conditions: SQL[] = [];
@@ -121,12 +132,17 @@ function buildingConditions(options: ListBuildingOptions): SQL | undefined {
     conditions.push(isNull(buildings.archivedAt), isNull(clients.archivedAt));
   }
 
-  if (options.clientId) {
+  if (options.clientId && isSetupRecordId(options.clientId)) {
     conditions.push(eq(buildings.clientId, options.clientId));
   }
 
-  if (options.buildingId) {
+  if (options.buildingId && isSetupRecordId(options.buildingId)) {
     conditions.push(eq(buildings.id, options.buildingId));
+  }
+
+  const search = searchTerm(options.search);
+  if (search) {
+    conditions.push(nameContains(sql`${buildings.name}`, search));
   }
 
   return combineConditions(conditions);

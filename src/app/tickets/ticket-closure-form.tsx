@@ -1,0 +1,161 @@
+"use client";
+
+import { useActionState, useRef, useState } from "react";
+
+import { closeTicketAction, type CloseTicketActionState } from "./actions";
+
+const initialState = { status: "idle" } satisfies CloseTicketActionState;
+
+type SelectedAfterPhoto = {
+  id: string;
+  file: File;
+};
+
+function FieldError({ message }: { message: string | undefined }) {
+  if (!message) {
+    return null;
+  }
+
+  return <p className="text-sm font-medium text-red-700">{message}</p>;
+}
+
+function fieldError(
+  state: CloseTicketActionState,
+  field: "ticketId" | "resolutionNote" | "afterPhotos",
+): string | undefined {
+  return state.status === "error" ? state.errors[field] : undefined;
+}
+
+function resolutionNoteValue(state: CloseTicketActionState): string {
+  return state.status === "error" ? state.values.resolutionNote : "";
+}
+
+function selectedPhotoId(file: File): string {
+  return `${file.name}-${file.size}-${file.lastModified}`;
+}
+
+export function TicketClosureForm({ ticketId }: { ticketId: string }) {
+  const [selectedPhotos, setSelectedPhotos] = useState<SelectedAfterPhoto[]>([]);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const formActionWithPhotos = async (
+    previousState: CloseTicketActionState,
+    formData: FormData,
+  ) => {
+    formData.delete("afterPhotos");
+    selectedPhotos.forEach(({ file }) => formData.append("afterPhotos", file));
+
+    return closeTicketAction(previousState, formData);
+  };
+  const [state, formAction, isPending] = useActionState(
+    formActionWithPhotos,
+    initialState,
+  );
+  const isClosed = state.status === "success";
+
+  function addSelectedPhotos(files: FileList | null): void {
+    if (!files || isClosed) {
+      return;
+    }
+
+    setSelectedPhotos((current) => {
+      const next = new Map(current.map((photo) => [photo.id, photo]));
+
+      Array.from(files)
+        .filter((file) => file.size > 0)
+        .forEach((file) => {
+          next.set(selectedPhotoId(file), { id: selectedPhotoId(file), file });
+        });
+
+      return [...next.values()];
+    });
+
+    if (inputRef.current) {
+      inputRef.current.value = "";
+    }
+  }
+
+  function removeSelectedPhoto(id: string): void {
+    setSelectedPhotos((current) => current.filter((photo) => photo.id !== id));
+  }
+
+  return (
+    <form action={formAction} className="space-y-4 rounded-2xl border border-slate-200 p-5">
+      <input name="ticketId" type="hidden" value={ticketId} />
+      <FieldError message={fieldError(state, "ticketId")} />
+
+      <label className="block space-y-2" htmlFor="resolution-note">
+        <span className="text-sm font-semibold text-slate-900">Resolution note</span>
+        <textarea
+          className="min-h-28 w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-950 shadow-sm focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100 disabled:cursor-not-allowed disabled:bg-slate-100"
+          defaultValue={resolutionNoteValue(state)}
+          disabled={isClosed}
+          id="resolution-note"
+          maxLength={1000}
+          name="resolutionNote"
+          required
+        />
+        <FieldError message={fieldError(state, "resolutionNote")} />
+      </label>
+
+      <div className="space-y-3">
+        <label className="block space-y-2" htmlFor="after-photos">
+          <span className="text-sm font-semibold text-slate-900">After Photos</span>
+          <input
+            accept="image/jpeg,image/png,image/webp"
+            className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm text-slate-950 shadow-sm file:mr-4 file:rounded-lg file:border-0 file:bg-brand-700 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100 disabled:cursor-not-allowed disabled:bg-slate-100"
+            disabled={isClosed}
+            id="after-photos"
+            multiple
+            onChange={(event) => addSelectedPhotos(event.currentTarget.files)}
+            ref={inputRef}
+            type="file"
+          />
+        </label>
+        <FieldError message={fieldError(state, "afterPhotos")} />
+
+        {selectedPhotos.length === 0 ? (
+          <p className="text-sm text-muted-ink">No After Photos selected.</p>
+        ) : (
+          <ul className="space-y-2" aria-label="Selected After Photos">
+            {selectedPhotos.map((photo) => (
+              <li
+                className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 px-4 py-3 text-sm"
+                key={photo.id}
+              >
+                <span className="truncate text-slate-700">{photo.file.name}</span>
+                <button
+                  className="text-sm font-semibold text-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={isClosed || isPending}
+                  onClick={() => removeSelectedPhoto(photo.id)}
+                  type="button"
+                >
+                  Remove
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {state.status === "error" && state.formError ? (
+        <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+          {state.formError}
+        </p>
+      ) : null}
+
+      {state.status === "success" ? (
+        <p className="rounded-xl border border-brand-100 bg-brand-50 px-4 py-3 text-sm font-medium text-brand-700">
+          {state.message}
+        </p>
+      ) : null}
+
+      <button
+        className="rounded-xl bg-brand-700 px-5 py-3 text-sm font-semibold text-white shadow-sm hover:bg-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100 disabled:cursor-not-allowed disabled:opacity-60"
+        disabled={isPending || isClosed}
+        type="submit"
+      >
+        {isPending ? "Closing…" : "Close Ticket"}
+      </button>
+    </form>
+  );
+}

@@ -197,7 +197,20 @@ function BeforePhotoControls({
       <form action={addFormAction} className="space-y-2">
         <input name="inspectionId" type="hidden" value={inspectionId} />
         <input name="itemId" type="hidden" value={item.id} />
-        <input accept="image/jpeg,image/png,image/webp" capture="environment" name="photo" type="file" />
+        <label className="block space-y-2" htmlFor={`before-photo-${item.id}`}>
+          <span className="text-sm font-semibold text-amber-950">
+            Choose Before Photo
+          </span>
+          <input
+            accept="image/jpeg,image/png,image/webp"
+            capture="environment"
+            className="w-full rounded-xl border border-amber-300 bg-white px-4 py-3 text-sm text-slate-950 shadow-sm file:mr-4 file:rounded-lg file:border-0 file:bg-amber-700 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white focus:border-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-100 disabled:cursor-not-allowed disabled:bg-amber-50"
+            disabled={isAdding}
+            id={`before-photo-${item.id}`}
+            name="photo"
+            type="file"
+          />
+        </label>
         {addState.status === "error" ? <FieldError message={addState.errors.photo} /> : null}
         <ActionMessage state={addState} />
         <ActionMessage state={removeState} />

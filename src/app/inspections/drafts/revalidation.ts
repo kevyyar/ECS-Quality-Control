@@ -2,6 +2,7 @@ import { revalidatePath } from "next/cache";
 
 export function revalidateDraftInspectionViews(draftInspectionId?: string): void {
   revalidatePath("/inspections/drafts");
+  revalidatePath("/inspections");
   revalidatePath("/dashboard");
 
   if (draftInspectionId) {

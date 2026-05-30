@@ -73,18 +73,19 @@ type AreaWithParentsRow = {
 
 type ListOptions = {
   visibility?: SetupVisibility;
+  search?: string | undefined;
 };
 
 type ListBuildingOptions = ListOptions & {
-  clientId?: string;
-  buildingId?: string;
+  clientId?: string | undefined;
+  buildingId?: string | undefined;
 };
 
 type ListAreaOptions = ListOptions & {
-  clientId?: string;
-  buildingId?: string;
-  areaTypeId?: string;
-  areaId?: string;
+  clientId?: string | undefined;
+  buildingId?: string | undefined;
+  areaTypeId?: string | undefined;
+  areaId?: string | undefined;
 };
 
 type SetupRecordType =
@@ -259,8 +260,30 @@ function combineConditions(conditions: SQL[]): SQL | undefined {
   return rest.length === 0 ? first : (and(first, ...rest) ?? first);
 }
 
-function clientVisibilityCondition(visibility: SetupVisibility): SQL | undefined {
-  return visibility === "active" ? isNull(clients.archivedAt) : undefined;
+function searchTerm(value: string | undefined): string | null {
+  const term = value?.trim();
+
+  return term ? `%${term.replace(/[\\%_]/g, "\\$&")}%` : null;
+}
+
+function nameContains(column: SQL, pattern: string): SQL {
+  return sql`${column} ilike ${pattern} escape '\\'`;
+}
+
+function clientConditions(options: ListOptions): SQL | undefined {
+  const visibility = options.visibility ?? "active";
+  const conditions: SQL[] = [];
+  const search = searchTerm(options.search);
+
+  if (visibility === "active") {
+    conditions.push(isNull(clients.archivedAt));
+  }
+
+  if (search) {
+    conditions.push(nameContains(sql`${clients.name}`, search));
+  }
+
+  return combineConditions(conditions);
 }
 
 function areaTypeVisibilityCondition(visibility: SetupVisibility): SQL | undefined {
@@ -281,12 +304,17 @@ function buildingConditions(options: ListBuildingOptions): SQL | undefined {
     conditions.push(isNull(buildings.archivedAt), isNull(clients.archivedAt));
   }
 
-  if (options.clientId) {
+  if (options.clientId && isSetupRecordId(options.clientId)) {
     conditions.push(eq(buildings.clientId, options.clientId));
   }
 
-  if (options.buildingId) {
+  if (options.buildingId && isSetupRecordId(options.buildingId)) {
     conditions.push(eq(buildings.id, options.buildingId));
+  }
+
+  const search = searchTerm(options.search);
+  if (search) {
+    conditions.push(nameContains(sql`${buildings.name}`, search));
   }
 
   return combineConditions(conditions);
@@ -305,20 +333,25 @@ function areaConditions(options: ListAreaOptions): SQL | undefined {
     );
   }
 
-  if (options.clientId) {
+  if (options.clientId && isSetupRecordId(options.clientId)) {
     conditions.push(eq(buildings.clientId, options.clientId));
   }
 
-  if (options.buildingId) {
+  if (options.buildingId && isSetupRecordId(options.buildingId)) {
     conditions.push(eq(areas.buildingId, options.buildingId));
   }
 
-  if (options.areaTypeId) {
+  if (options.areaTypeId && isSetupRecordId(options.areaTypeId)) {
     conditions.push(eq(areas.areaTypeId, options.areaTypeId));
   }
 
-  if (options.areaId) {
+  if (options.areaId && isSetupRecordId(options.areaId)) {
     conditions.push(eq(areas.id, options.areaId));
+  }
+
+  const search = searchTerm(options.search);
+  if (search) {
+    conditions.push(nameContains(sql`${areas.name}`, search));
   }
 
   return combineConditions(conditions);
@@ -760,7 +793,7 @@ export async function listClients(
   options: ListOptions = {},
 ): Promise<ClientSetupRecord[]> {
   const { db } = await import("@/db/client");
-  const condition = clientVisibilityCondition(options.visibility ?? "active");
+  const condition = clientConditions(options);
   const query = db.select().from(clients);
   const rows = condition
     ? await query.where(condition).orderBy(asc(clients.name))

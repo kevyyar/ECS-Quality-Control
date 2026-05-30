@@ -477,6 +477,10 @@ export const tickets = pgTable(
       .references(() => areas.id, { onDelete: "restrict" }),
     createdByAuthUserId: uuid("created_by_auth_user_id").notNull(),
     createdByEmail: varchar("created_by_email", { length: 320 }).notNull(),
+    resolutionNote: varchar("resolution_note", { length: 1000 }),
+    closedByAuthUserId: uuid("closed_by_auth_user_id"),
+    closedByEmail: varchar("closed_by_email", { length: 320 }),
+    closedAt: timestamp("closed_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -494,6 +498,90 @@ export const tickets = pgTable(
     uniqueIndex("tickets_inspection_item_id_unique").on(table.inspectionItemId),
     check("tickets_status_valid", sql`${table.status} in ('open', 'closed')`),
     check("tickets_title_not_blank", sql`length(btrim(${table.title})) > 0`),
+    check(
+      "tickets_closure_metadata_matches_status",
+      sql`(
+        ${table.status} = 'open'
+        and ${table.resolutionNote} is null
+        and ${table.closedByAuthUserId} is null
+        and ${table.closedByEmail} is null
+        and ${table.closedAt} is null
+      ) or (
+        ${table.status} = 'closed'
+        and ${table.resolutionNote} is not null
+        and length(btrim(${table.resolutionNote})) > 0
+        and ${table.closedByAuthUserId} is not null
+        and ${table.closedByEmail} is not null
+        and ${table.closedAt} is not null
+      )`,
+    ),
+  ],
+).enableRLS();
+
+export const ticketAfterPhotoEvidence = pgTable(
+  "ticket_after_photo_evidence",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    ticketId: uuid("ticket_id")
+      .notNull()
+      .references(() => tickets.id, { onDelete: "restrict" }),
+    storagePath: varchar("storage_path", { length: 2048 }).notNull(),
+    uploadedByAuthUserId: uuid("uploaded_by_auth_user_id").notNull(),
+    uploadedAt: timestamp("uploaded_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("ticket_after_photo_evidence_ticket_id_idx").on(table.ticketId),
+    check(
+      "ticket_after_photo_evidence_storage_path_not_blank",
+      sql`length(btrim(${table.storagePath})) > 0`,
+    ),
+  ],
+).enableRLS();
+
+export const correctionNotes = pgTable(
+  "correction_notes",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    targetType: varchar("target_type", { length: 32 }).notNull(),
+    inspectionId: uuid("inspection_id").references(() => inspections.id, {
+      onDelete: "restrict",
+    }),
+    ticketId: uuid("ticket_id").references(() => tickets.id, {
+      onDelete: "restrict",
+    }),
+    note: varchar("note", { length: 1000 }).notNull(),
+    createdByAuthUserId: uuid("created_by_auth_user_id").notNull(),
+    createdByEmail: varchar("created_by_email", { length: 320 }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("correction_notes_inspection_id_idx").on(table.inspectionId),
+    index("correction_notes_ticket_id_idx").on(table.ticketId),
+    index("correction_notes_created_at_idx").on(table.createdAt),
+    check(
+      "correction_notes_target_type_valid",
+      sql`${table.targetType} in ('submitted_inspection', 'ticket')`,
+    ),
+    check("correction_notes_note_not_blank", sql`length(btrim(${table.note})) > 0`),
+    check(
+      "correction_notes_target_matches_type",
+      sql`(
+        ${table.targetType} = 'submitted_inspection'
+        and ${table.inspectionId} is not null
+        and ${table.ticketId} is null
+      ) or (
+        ${table.targetType} = 'ticket'
+        and ${table.ticketId} is not null
+        and ${table.inspectionId} is null
+      )`,
+    ),
   ],
 ).enableRLS();
 

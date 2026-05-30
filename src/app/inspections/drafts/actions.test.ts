@@ -568,6 +568,8 @@ describe("Draft Inspection actions", () => {
       { inspectionId: draftInspectionId, confirmSkippedPlannedAreas: false },
       supervisor,
     );
+    expect(revalidatePath).toHaveBeenCalledWith("/inspections");
+    expect(revalidatePath).toHaveBeenCalledWith("/tickets");
     expect(revalidatePath).toHaveBeenCalledWith(`/inspections/drafts/${draftInspectionId}`);
   });
 
@@ -589,6 +591,8 @@ describe("Draft Inspection actions", () => {
       alreadySubmitted: true,
     });
 
+    expect(revalidatePath).toHaveBeenCalledWith("/inspections");
+    expect(revalidatePath).toHaveBeenCalledWith("/tickets");
     expect(revalidatePath).toHaveBeenCalledWith(`/inspections/drafts/${draftInspectionId}`);
   });
 

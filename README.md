@@ -107,6 +107,11 @@ Only variables prefixed with `NEXT_PUBLIC_` may be read by browser code.
 | `pnpm db:migrate` | Apply Drizzle migrations using `DATABASE_URL`. |
 | `pnpm db:studio` | Open Drizzle Studio for the configured database. |
 
+
+## Deployment
+
+Staging and production deployment instructions live in [`docs/deployment.md`](./docs/deployment.md). The Vercel build path runs `pnpm deploy:check && pnpm build`, so deployments fail fast when required environment variables are missing and always run typecheck, lint, and unit tests before the production build. The same document covers production migration safety, backups, photo/object storage boundaries, Supervisor bootstrap, restore notes, and seed/starter-data safety.
+
 ## Database and migrations
 
 Drizzle Kit reads configuration from [`drizzle.config.ts`](./drizzle.config.ts). The schema entrypoint is [`src/db/schema.ts`](./src/db/schema.ts), and generated migrations are written to `drizzle/`.

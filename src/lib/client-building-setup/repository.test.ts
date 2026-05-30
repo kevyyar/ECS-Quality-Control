@@ -1435,3 +1435,82 @@ describe("Client and Building setup repository", () => {
     expect(insertValues).not.toHaveBeenCalled();
   });
 });
+
+describe("setup search", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    selectFrom.mockReturnValue({
+      innerJoin: selectInnerJoin,
+      leftJoin: selectLeftJoin,
+      where: selectWhere,
+      orderBy: selectOrderBy,
+      limit: vi.fn(),
+    });
+    selectInnerJoin.mockReturnValue({
+      innerJoin: selectInnerJoin,
+      leftJoin: selectLeftJoin,
+      where: selectWhere,
+      orderBy: selectOrderBy,
+    });
+    selectLeftJoin.mockReturnValue({
+      leftJoin: selectLeftJoin,
+      where: selectWhere,
+      orderBy: selectOrderBy,
+    });
+    selectWhere.mockReturnValue({ orderBy: selectOrderBy, limit: vi.fn() });
+    db.select.mockReturnValue({ from: selectFrom });
+  });
+
+  it("adds simple name search to Client, Building, and Area setup lists", async () => {
+    selectOrderBy.mockResolvedValue([]);
+
+    await listClients({ visibility: "historical", search: "Acme" });
+    await listBuildings({ visibility: "historical", search: "North" });
+    await listAreas({ visibility: "historical", search: "Restroom" });
+
+    expect(selectWhere).toHaveBeenCalledTimes(3);
+  });
+
+  it("ignores malformed URL-derived setup filters", async () => {
+    selectOrderBy.mockResolvedValue([]);
+
+    await listBuildings({ visibility: "historical", clientId: "not-a-uuid" });
+    await listAreas({ visibility: "historical", buildingId: "not-a-uuid" });
+
+    expect(selectWhere).not.toHaveBeenCalled();
+  });
+});
+
+
+describe("building inspection plan summary search", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    selectFrom.mockReturnValue({
+      innerJoin: selectInnerJoin,
+      leftJoin: selectLeftJoin,
+      where: selectWhere,
+      orderBy: selectOrderBy,
+    });
+    selectInnerJoin.mockReturnValue({
+      innerJoin: selectInnerJoin,
+      leftJoin: selectLeftJoin,
+      where: selectWhere,
+      orderBy: selectOrderBy,
+    });
+    selectLeftJoin.mockReturnValue({
+      leftJoin: selectLeftJoin,
+      where: selectWhere,
+      orderBy: selectOrderBy,
+    });
+    selectWhere.mockReturnValue({ orderBy: selectOrderBy });
+    db.select.mockReturnValue({ from: selectFrom });
+  });
+
+  it("adds simple name search to Building Inspection Plan summary building lookup", async () => {
+    selectOrderBy.mockResolvedValueOnce([]);
+
+    await listBuildingInspectionPlanSummaries({ visibility: "historical", search: "North" });
+
+    expect(selectWhere).toHaveBeenCalledTimes(1);
+  });
+});

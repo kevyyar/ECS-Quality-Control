@@ -10,7 +10,7 @@ import {
 import { AreaCreateForm } from "./area-form";
 
 type AreasPageProps = {
-  searchParams?: Promise<{ includeArchived?: string }>;
+  searchParams?: Promise<{ includeArchived?: string; q?: string }>;
 };
 
 function statusLabel(area: Awaited<ReturnType<typeof listAreas>>[number]): string {
@@ -39,7 +39,7 @@ export default async function AreasPage({ searchParams }: AreasPageProps) {
   const params = await searchParams;
   const includeArchived = params?.includeArchived === "1";
   const [areas, activeBuildings, activeAreaTypes] = await Promise.all([
-    listAreas({ visibility: includeArchived ? "historical" : "active" }),
+    listAreas({ visibility: includeArchived ? "historical" : "active", search: params?.q }),
     listBuildings({ visibility: "active" }),
     listAreaTypes({ visibility: "active" }),
   ]);
@@ -63,6 +63,22 @@ export default async function AreasPage({ searchParams }: AreasPageProps) {
         </div>
 
         <AreaCreateForm activeBuildings={activeBuildings} activeAreaTypes={activeAreaTypes} />
+
+        <form className="flex flex-col gap-3 rounded-2xl border border-slate-200 p-5 sm:flex-row sm:items-end">
+          <label className="flex-1 space-y-2" htmlFor="area-search">
+            <span className="text-sm font-semibold text-slate-900">Search Areas by name</span>
+            <input
+              className="w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-950 shadow-sm focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100"
+              defaultValue={params?.q ?? ""}
+              id="area-search"
+              name="q"
+              type="search"
+            />
+          </label>
+          {includeArchived ? <input name="includeArchived" type="hidden" value="1" /> : null}
+          <button className="rounded-xl bg-brand-700 px-5 py-3 text-sm font-semibold text-white shadow-sm hover:bg-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100" type="submit">Search</button>
+          <Link className="py-3 text-sm font-semibold text-brand-700" href={includeArchived ? "/setup/areas?includeArchived=1" : "/setup/areas"}>Clear</Link>
+        </form>
 
         <div className="space-y-4">
           <div className="flex items-center justify-between gap-4">

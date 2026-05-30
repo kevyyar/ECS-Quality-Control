@@ -1,5 +1,7 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
+
 import { requireProtectedAction } from "@/lib/auth/session";
 import { processInspectionPhoto } from "@/lib/inspections/evidence/photo-processing";
 import {
@@ -47,6 +49,7 @@ import {
   removeDraftInspectionItemBeforePhoto,
   unskipDraftAreaInspection,
 } from "@/lib/inspections/drafts/repository";
+import { logOperationalError } from "@/lib/observability/logger";
 
 import { revalidateDraftInspectionViews } from "./revalidation";
 
@@ -199,6 +202,12 @@ export async function startDraftInspectionAction(
       draftInspectionId: draft.id,
     };
   } catch (error) {
+    logOperationalError("draft.start.failed", error, {
+      workflow: "draft.start",
+      buildingId: result.data.buildingId,
+      authUserId: user.authUserId,
+    });
+
     if (isActiveBuildingRequiredForDraftError(error)) {
       return {
         status: "error",
@@ -378,6 +387,7 @@ export async function submitDraftInspectionAction(
   try {
     const submitted = await submitDraftInspection(result.data, user);
     revalidateDraftInspectionViews(submitted.id);
+    revalidatePath("/tickets");
 
     return {
       status: "success",
@@ -389,6 +399,12 @@ export async function submitDraftInspectionAction(
       alreadySubmitted: submitted.alreadySubmitted,
     };
   } catch (error) {
+    logOperationalError("draft.submit.failed", error, {
+      workflow: "draft.submit",
+      inspectionId: result.data.inspectionId,
+      authUserId: user.authUserId,
+    });
+
     if (isDraftSubmissionValidationError(error)) {
       return {
         status: "error",
@@ -491,6 +507,14 @@ export async function addDraftInspectionItemBeforePhotoAction(
       draftInspectionId: draft.id,
     };
   } catch (error) {
+    logOperationalError("photo.before.attach.failed", error, {
+      workflow: "photo.before.attach",
+      inspectionId,
+      itemId,
+      photoSize: photo.size,
+      authUserId: user.authUserId,
+    });
+
     const formError = draftMutationErrorMessage(error) ?? "Before Photo could not be attached.";
 
     return { status: "error", errors: {}, values, formError };

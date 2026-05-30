@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { logOperationalError } from "@/lib/observability/logger";
 
 import { getInternalUserProfileByAuthUserId } from "./internal-users";
 
@@ -72,7 +73,9 @@ export async function signInInternalUser(
 
   try {
     supabase = await createServerSupabaseClient();
-  } catch {
+  } catch (error) {
+    logOperationalError("login.supabase-client.failed", error, { workflow: "login" });
+
     return invalidLoginState;
   }
 
@@ -89,7 +92,9 @@ export async function signInInternalUser(
     }
 
     authUserId = user.id;
-  } catch {
+  } catch (error) {
+    logOperationalError("login.password-sign-in.failed", error, { workflow: "login" });
+
     return invalidLoginState;
   }
 
@@ -99,7 +104,11 @@ export async function signInInternalUser(
     hasInternalProfile = Boolean(
       await getInternalUserProfileByAuthUserId(authUserId),
     );
-  } catch {
+  } catch (error) {
+    logOperationalError("login.internal-profile.failed", error, {
+      workflow: "login",
+      authUserId,
+    });
     await signOutWithoutLeakingReason(supabase);
 
     return invalidLoginState;

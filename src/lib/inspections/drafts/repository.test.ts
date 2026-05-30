@@ -948,12 +948,45 @@ describe("Draft Inspection repository", () => {
     expect(insertValues).not.toHaveBeenCalled();
   });
 
-  it("rejects submitted Draft mutations", async () => {
+  it("rejects submitted Inspection discard attempts", async () => {
     selectLimit.mockResolvedValueOnce([]);
 
     await expect(
       discardDraftInspection({ inspectionId: submittedInspectionRow.id }),
     ).rejects.toBeInstanceOf(DraftInspectionNotFoundError);
+
+    expect(deleteWhere).not.toHaveBeenCalled();
+  });
+
+  it("rejects submitted Inspection item edits", async () => {
+    selectLimit.mockResolvedValueOnce([]);
+
+    await expect(
+      saveDraftInspectionItemResult({
+        inspectionId: submittedInspectionRow.id,
+        itemId: savedInspectionItemRow.id,
+        resultStatus: "pass",
+        resultNote: "Changed after submission",
+      }),
+    ).rejects.toBeInstanceOf(DraftInspectionNotFoundError);
+
+    expect(updateSet).not.toHaveBeenCalled();
+  });
+
+  it("rejects submitted Inspection Before Photo changes", async () => {
+    selectLimit.mockResolvedValueOnce([]);
+
+    await expect(
+      addDraftInspectionItemBeforePhoto({
+        inspectionId: submittedInspectionRow.id,
+        itemId: savedInspectionItemRow.id,
+        storagePath: beforePhotoEvidenceRow.storagePath,
+        uploadedByAuthUserId: starter.authUserId,
+      }),
+    ).rejects.toBeInstanceOf(DraftInspectionNotFoundError);
+
+    expect(insertValues).not.toHaveBeenCalled();
+    expect(updateSet).not.toHaveBeenCalled();
   });
 
   it("lists active Draft Inspections with snapshot metadata and counts", async () => {
