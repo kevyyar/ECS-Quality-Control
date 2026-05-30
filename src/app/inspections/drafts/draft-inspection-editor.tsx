@@ -11,13 +11,16 @@ import type {
 
 import {
   addOneOffAreaInspectionAction,
+  addDraftInspectionItemBeforePhotoAction,
   discardDraftInspectionAction,
+  removeDraftInspectionItemBeforePhotoAction,
   saveDraftInspectionItemResultAction,
   skipDraftAreaInspectionAction,
   submitDraftInspectionAction,
   unskipDraftAreaInspectionAction,
   type AddOneOffAreaInspectionActionState,
   type DiscardDraftInspectionActionState,
+  type DraftInspectionItemBeforePhotoActionState,
   type SaveDraftInspectionItemResultActionState,
   type SkipDraftAreaInspectionActionState,
   type SubmitDraftInspectionActionState,
@@ -32,6 +35,9 @@ const unskipInitialState = { status: "idle" } satisfies UnskipDraftAreaInspectio
 const oneOffInitialState = { status: "idle" } satisfies AddOneOffAreaInspectionActionState;
 const submitInitialState = { status: "idle" } satisfies SubmitDraftInspectionActionState;
 const discardInitialState = { status: "idle" } satisfies DiscardDraftInspectionActionState;
+const beforePhotoInitialState = {
+  status: "idle",
+} satisfies DraftInspectionItemBeforePhotoActionState;
 
 export type DraftEditorItem = Pick<
   DraftInspectionItemRecord,
@@ -42,7 +48,13 @@ export type DraftEditorItem = Pick<
   | "itemDescriptionSnapshot"
   | "resultStatus"
   | "resultNote"
->;
+> & {
+  beforePhotos: {
+    id: string;
+    uploadedAt: string;
+    url: string | null;
+  }[];
+};
 
 export type DraftEditorAreaInspection = Pick<
   DraftAreaInspectionRecord,
@@ -99,7 +111,8 @@ function ActionMessage({
     | UnskipDraftAreaInspectionActionState
     | AddOneOffAreaInspectionActionState
     | SubmitDraftInspectionActionState
-    | DiscardDraftInspectionActionState;
+    | DiscardDraftInspectionActionState
+    | DraftInspectionItemBeforePhotoActionState;
 }) {
   if (state.status === "idle") {
     return null;
@@ -118,6 +131,84 @@ function ActionMessage({
   }
 
   return null;
+}
+
+function BeforePhotoControls({
+  inspectionId,
+  item,
+}: {
+  inspectionId: string;
+  item: DraftEditorItem;
+}) {
+  const [addState, addFormAction, isAdding] = useActionState(
+    addDraftInspectionItemBeforePhotoAction,
+    beforePhotoInitialState,
+  );
+  const [removeState, removeFormAction, isRemoving] = useActionState(
+    removeDraftInspectionItemBeforePhotoAction,
+    beforePhotoInitialState,
+  );
+
+  if (item.resultStatus !== "fail") {
+    return null;
+  }
+
+  return (
+    <div className="mt-4 space-y-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
+      <div>
+        <p className="text-sm font-semibold text-amber-950">Before Photos</p>
+        <p className="text-sm text-amber-900">
+          Failed items need at least one Before Photo before submission.
+        </p>
+      </div>
+      {item.beforePhotos.length > 0 ? (
+        <ul className="grid gap-3 sm:grid-cols-2">
+          {item.beforePhotos.map((photo) => (
+            <li className="space-y-2 rounded-lg bg-white p-3" key={photo.id}>
+              {photo.url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img alt="Before evidence" className="h-32 w-full rounded-lg object-cover" src={photo.url} />
+              ) : (
+                <p className="rounded-lg bg-slate-100 p-3 text-sm text-muted-ink">
+                  Preview unavailable.
+                </p>
+              )}
+              <p className="text-xs text-muted-ink">
+                Uploaded {new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(new Date(photo.uploadedAt))}
+              </p>
+              <form action={removeFormAction}>
+                <input name="inspectionId" type="hidden" value={inspectionId} />
+                <input name="itemId" type="hidden" value={item.id} />
+                <input name="evidenceId" type="hidden" value={photo.id} />
+                <button
+                  className="rounded-lg border border-red-200 px-3 py-1.5 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:opacity-60"
+                  disabled={isRemoving}
+                  type="submit"
+                >
+                  {isRemoving ? "Removing…" : "Remove photo"}
+                </button>
+              </form>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      <form action={addFormAction} className="space-y-2">
+        <input name="inspectionId" type="hidden" value={inspectionId} />
+        <input name="itemId" type="hidden" value={item.id} />
+        <input accept="image/jpeg,image/png,image/webp" capture="environment" name="photo" type="file" />
+        {addState.status === "error" ? <FieldError message={addState.errors.photo} /> : null}
+        <ActionMessage state={addState} />
+        <ActionMessage state={removeState} />
+        <button
+          className="rounded-xl bg-amber-700 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-600 disabled:opacity-60"
+          disabled={isAdding}
+          type="submit"
+        >
+          {isAdding ? "Attaching…" : "Attach Before Photo"}
+        </button>
+      </form>
+    </div>
+  );
 }
 
 function SubmissionValidationSummary({
@@ -185,6 +276,7 @@ function ItemResultForm({
   );
 
   return (
+    <>
     <form
       action={formAction}
       className="mt-4 space-y-3 rounded-xl border border-slate-200 bg-white p-4"
@@ -239,6 +331,8 @@ function ItemResultForm({
         {isPending ? "Saving…" : "Save item result"}
       </button>
     </form>
+    <BeforePhotoControls inspectionId={inspectionId} item={item} />
+    </>
   );
 }
 

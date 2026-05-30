@@ -1,6 +1,11 @@
 "use server";
 
 import { requireProtectedAction } from "@/lib/auth/session";
+import { processInspectionPhoto } from "@/lib/inspections/evidence/photo-processing";
+import {
+  removeInspectionEvidencePhoto,
+  uploadInspectionEvidencePhoto,
+} from "@/lib/inspections/evidence/storage";
 import {
   parseAddOneOffAreaInspectionFormData,
   parseDiscardDraftInspectionFormData,
@@ -25,6 +30,7 @@ import {
 } from "@/lib/inspections/drafts/model";
 import {
   addOneOffAreaInspection,
+  addDraftInspectionItemBeforePhoto,
   discardDraftInspection,
   isActiveBuildingInspectionPlanRequiredForDraftError,
   isActiveBuildingRequiredForDraftError,
@@ -37,6 +43,7 @@ import {
   skipDraftAreaInspection,
   startDraftInspection,
   submitDraftInspection,
+  removeDraftInspectionItemBeforePhoto,
   unskipDraftAreaInspection,
 } from "@/lib/inspections/drafts/repository";
 
@@ -104,6 +111,14 @@ export type DiscardDraftInspectionActionState =
     }
   | ActionErrorState<DraftInspectionIdentityFormValues, DraftInspectionIdentityFieldErrors>;
 
+export type DraftInspectionItemBeforePhotoActionState =
+  | { status: "idle" }
+  | DraftMutationSuccessState
+  | ActionErrorState<
+      { inspectionId: string; itemId: string; evidenceId?: string },
+      Partial<Record<"inspectionId" | "itemId" | "photo" | "evidenceId", string>>
+    >;
+
 function draftMutationErrorMessage(error: unknown): string | undefined {
   if (isDraftInspectionNotFoundError(error)) {
     return "Draft Inspection was not found.";
@@ -137,6 +152,11 @@ function saveItemValues(
     resultStatus: data.resultStatus ?? "",
     resultNote: data.resultNote,
   };
+}
+
+function formString(formData: FormData, field: string): string {
+  const value = formData.get(field);
+  return typeof value === "string" ? value.trim() : "";
 }
 
 export async function startDraftInspectionAction(
@@ -399,5 +419,85 @@ export async function discardDraftInspectionAction(
     }
 
     throw error;
+  }
+}
+
+export async function addDraftInspectionItemBeforePhotoAction(
+  _previousState: DraftInspectionItemBeforePhotoActionState,
+  formData: FormData,
+): Promise<DraftInspectionItemBeforePhotoActionState> {
+  const user = await requireProtectedAction("editDraftInspection");
+  const inspectionId = formString(formData, "inspectionId");
+  const itemId = formString(formData, "itemId");
+  const photo = formData.get("photo");
+  const values = { inspectionId, itemId };
+
+  if (!(photo instanceof File) || photo.size === 0) {
+    return {
+      status: "error",
+      errors: { photo: "Choose a Before Photo." },
+      values,
+    };
+  }
+
+  try {
+    const processed = await processInspectionPhoto(photo);
+    const storagePath = await uploadInspectionEvidencePhoto({
+      inspectionId,
+      itemId,
+      photo: processed,
+    });
+    const draft = await addDraftInspectionItemBeforePhoto({
+      inspectionId,
+      itemId,
+      storagePath,
+      uploadedByAuthUserId: user.authUserId,
+    }).catch(async (error: unknown) => {
+      await removeInspectionEvidencePhoto(storagePath).catch(() => undefined);
+      throw error;
+    });
+
+    revalidateDraftInspectionViews(draft.id);
+
+    return {
+      status: "success",
+      message: "Before Photo attached.",
+      draftInspectionId: draft.id,
+    };
+  } catch (error) {
+    const formError = draftMutationErrorMessage(error) ?? "Before Photo could not be attached.";
+
+    return { status: "error", errors: {}, values, formError };
+  }
+}
+
+export async function removeDraftInspectionItemBeforePhotoAction(
+  _previousState: DraftInspectionItemBeforePhotoActionState,
+  formData: FormData,
+): Promise<DraftInspectionItemBeforePhotoActionState> {
+  await requireProtectedAction("editDraftInspection");
+  const inspectionId = formString(formData, "inspectionId");
+  const itemId = formString(formData, "itemId");
+  const evidenceId = formString(formData, "evidenceId");
+  const values = { inspectionId, itemId, evidenceId };
+
+  try {
+    const { draft, storagePath } = await removeDraftInspectionItemBeforePhoto({
+      inspectionId,
+      itemId,
+      evidenceId,
+    });
+    await removeInspectionEvidencePhoto(storagePath).catch(() => undefined);
+    revalidateDraftInspectionViews(draft.id);
+
+    return {
+      status: "success",
+      message: "Before Photo removed.",
+      draftInspectionId: draft.id,
+    };
+  } catch (error) {
+    const formError = draftMutationErrorMessage(error) ?? "Before Photo could not be removed.";
+
+    return { status: "error", errors: {}, values, formError };
   }
 }

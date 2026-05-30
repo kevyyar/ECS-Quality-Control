@@ -70,6 +70,7 @@ function validDraft(): DraftInspectionRecord {
             itemDescriptionSnapshot: "No streaks",
             resultStatus: "pass",
             resultNote: null,
+            beforePhotos: [],
           },
         ],
       },
@@ -208,7 +209,56 @@ describe("Draft Inspection model", () => {
     failedWithoutIssueNote.areaInspections[0]!.items[0]!.resultNote = "   ";
     expect(validateDraftInspectionForSubmission(failedWithoutIssueNote)).toMatchObject({
       ok: false,
-      errors: { items: { [itemId]: ["Enter an issue note for failed items."] } },
+      errors: {
+        items: {
+          [itemId]: [
+            "Enter an issue note for failed items.",
+            "Attach at least one Before Photo for failed items.",
+          ],
+        },
+      },
+    });
+
+    const failedWithoutBeforePhoto = validDraft();
+    failedWithoutBeforePhoto.areaInspections[0]!.items[0]!.resultStatus = "fail";
+    failedWithoutBeforePhoto.areaInspections[0]!.items[0]!.resultNote = "Mirror cracked";
+    expect(validateDraftInspectionForSubmission(failedWithoutBeforePhoto)).toMatchObject({
+      ok: false,
+      errors: { items: { [itemId]: ["Attach at least one Before Photo for failed items."] } },
+    });
+
+    const failedWithBeforePhoto = validDraft();
+    failedWithBeforePhoto.areaInspections[0]!.items[0]!.resultStatus = "fail";
+    failedWithBeforePhoto.areaInspections[0]!.items[0]!.resultNote = "Mirror cracked";
+    failedWithBeforePhoto.areaInspections[0]!.items[0]!.beforePhotos = [
+      {
+        id: "10101010-1010-4101-8101-101010101010",
+        inspectionItemId: itemId,
+        evidenceType: "before_photo",
+        storagePath: "inspections/drafts/photo.jpg",
+        uploadedByAuthUserId: "99999999-9999-4999-8999-999999999999",
+        uploadedAt: new Date("2026-05-29T15:00:00Z"),
+      },
+    ];
+    expect(validateDraftInspectionForSubmission(failedWithBeforePhoto)).toEqual({
+      ok: true,
+      errors: {},
+    });
+
+    const passedWithBeforePhoto = validDraft();
+    passedWithBeforePhoto.areaInspections[0]!.items[0]!.beforePhotos = [
+      {
+        id: "10101010-1010-4101-8101-101010101010",
+        inspectionItemId: itemId,
+        evidenceType: "before_photo",
+        storagePath: "inspections/drafts/photo.jpg",
+        uploadedByAuthUserId: "99999999-9999-4999-8999-999999999999",
+        uploadedAt: new Date("2026-05-29T15:00:00Z"),
+      },
+    ];
+    expect(validateDraftInspectionForSubmission(passedWithBeforePhoto)).toMatchObject({
+      ok: false,
+      errors: { items: { [itemId]: ["Before Photos are only allowed for failed items."] } },
     });
   });
 

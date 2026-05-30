@@ -46,10 +46,12 @@ const {
   DraftInspectionMutationNotAllowedError,
   DraftInspectionNotFoundError,
   DraftSubmissionValidationError,
+  addDraftInspectionItemBeforePhoto,
   addOneOffAreaInspection,
   discardDraftInspection,
   getDraftInspection,
   listActiveDraftInspections,
+  removeDraftInspectionItemBeforePhoto,
   saveDraftInspectionItemResult,
   skipDraftAreaInspection,
   startDraftInspection,
@@ -190,6 +192,16 @@ const savedInspectionItemRow = {
   updatedAt: startedAt,
 };
 
+const beforePhotoEvidenceRow = {
+  id: "10101010-1010-4101-8101-101010101010",
+  inspectionItemId: savedInspectionItemRow.id,
+  evidenceType: "before_photo" as const,
+  storagePath: "inspections/drafts/photo.jpg",
+  uploadedByAuthUserId: starter.authUserId,
+  uploadedAt: new Date("2026-05-29T15:00:00Z"),
+  createdAt: new Date("2026-05-29T15:00:00Z"),
+};
+
 function activePlanHydrationRow() {
   return {
     plan: planRow,
@@ -295,6 +307,7 @@ describe("Draft Inspection repository", () => {
               itemDescriptionSnapshot: inspectionTemplateItemRow.description,
               resultStatus: null,
               resultNote: null,
+              beforePhotos: [],
             },
           ],
         },
@@ -460,6 +473,7 @@ describe("Draft Inspection repository", () => {
           resultStatus: "fail",
           resultNote: "Mirror cracked",
         },
+        evidence: beforePhotoEvidenceRow,
       },
     ]);
 
@@ -509,6 +523,96 @@ describe("Draft Inspection repository", () => {
       }),
     ).rejects.toBeInstanceOf(DraftInspectionMutationNotAllowedError);
     expect(updateSet).not.toHaveBeenCalled();
+  });
+
+  it("adds Before Photo evidence only to failed Draft Inspection items", async () => {
+    selectLimit.mockResolvedValueOnce([
+      {
+        inspection: savedInspectionRow,
+        areaInspection: savedAreaInspectionRow,
+        item: { ...savedInspectionItemRow, resultStatus: "fail" },
+      },
+    ]);
+    selectOrderBy.mockResolvedValueOnce([
+      {
+        inspection: savedInspectionRow,
+        areaInspection: savedAreaInspectionRow,
+        item: { ...savedInspectionItemRow, resultStatus: "fail" },
+        evidence: beforePhotoEvidenceRow,
+      },
+    ]);
+
+    await expect(
+      addDraftInspectionItemBeforePhoto({
+        inspectionId: savedInspectionRow.id,
+        itemId: savedInspectionItemRow.id,
+        storagePath: ` ${beforePhotoEvidenceRow.storagePath} `,
+        uploadedByAuthUserId: starter.authUserId,
+      }),
+    ).resolves.toMatchObject({
+      areaInspections: [
+        {
+          items: [
+            expect.objectContaining({
+              beforePhotos: [expect.objectContaining({ storagePath: beforePhotoEvidenceRow.storagePath })],
+            }),
+          ],
+        },
+      ],
+    });
+
+    expect(insertValues).toHaveBeenCalledWith({
+      inspectionItemId: savedInspectionItemRow.id,
+      evidenceType: "before_photo",
+      storagePath: beforePhotoEvidenceRow.storagePath,
+      uploadedByAuthUserId: starter.authUserId,
+    });
+  });
+
+  it("rejects Before Photo evidence on non-failed items", async () => {
+    selectLimit.mockResolvedValueOnce([
+      {
+        inspection: savedInspectionRow,
+        areaInspection: savedAreaInspectionRow,
+        item: { ...savedInspectionItemRow, resultStatus: "pass" },
+      },
+    ]);
+
+    await expect(
+      addDraftInspectionItemBeforePhoto({
+        inspectionId: savedInspectionRow.id,
+        itemId: savedInspectionItemRow.id,
+        storagePath: beforePhotoEvidenceRow.storagePath,
+        uploadedByAuthUserId: starter.authUserId,
+      }),
+    ).rejects.toBeInstanceOf(DraftInspectionMutationNotAllowedError);
+    expect(insertValues).not.toHaveBeenCalled();
+  });
+
+  it("removes Before Photo metadata and returns the stored object path", async () => {
+    selectLimit.mockResolvedValueOnce([{ evidence: beforePhotoEvidenceRow }]);
+    selectOrderBy.mockResolvedValueOnce([
+      {
+        inspection: savedInspectionRow,
+        areaInspection: savedAreaInspectionRow,
+        item: { ...savedInspectionItemRow, resultStatus: "fail" },
+        evidence: null,
+      },
+    ]);
+
+    await expect(
+      removeDraftInspectionItemBeforePhoto({
+        inspectionId: savedInspectionRow.id,
+        itemId: savedInspectionItemRow.id,
+        evidenceId: beforePhotoEvidenceRow.id,
+      }),
+    ).resolves.toMatchObject({
+      draft: { id: savedInspectionRow.id },
+      storagePath: beforePhotoEvidenceRow.storagePath,
+    });
+
+    expect(deleteWhere).toHaveBeenCalledTimes(1);
+    expect(updateSet).toHaveBeenCalledWith(expect.objectContaining({ updatedAt: expect.anything() }));
   });
 
   it("marks planned Area Inspections skipped and clears item results", async () => {
@@ -720,6 +824,7 @@ describe("Draft Inspection repository", () => {
           resultStatus: "fail",
           resultNote: "Mirror cracked",
         },
+        evidence: beforePhotoEvidenceRow,
       },
     ]);
 

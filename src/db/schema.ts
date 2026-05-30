@@ -420,6 +420,36 @@ export const inspectionItems = pgTable(
   ],
 ).enableRLS();
 
+export const inspectionItemEvidence = pgTable(
+  "inspection_item_evidence",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    inspectionItemId: uuid("inspection_item_id")
+      .notNull()
+      .references(() => inspectionItems.id, { onDelete: "cascade" }),
+    evidenceType: varchar("evidence_type", { length: 32 }).notNull(),
+    storagePath: varchar("storage_path", { length: 2048 }).notNull(),
+    uploadedByAuthUserId: uuid("uploaded_by_auth_user_id").notNull(),
+    uploadedAt: timestamp("uploaded_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("inspection_item_evidence_item_id_idx").on(table.inspectionItemId),
+    check(
+      "inspection_item_evidence_type_valid",
+      sql`${table.evidenceType} in ('before_photo')`,
+    ),
+    check(
+      "inspection_item_evidence_storage_path_not_blank",
+      sql`length(btrim(${table.storagePath})) > 0`,
+    ),
+  ],
+).enableRLS();
+
 export const tickets = pgTable(
   "tickets",
   {

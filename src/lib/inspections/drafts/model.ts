@@ -44,6 +44,19 @@ export type SubmitDraftInspectionInput = {
   inspectionId: string;
 };
 
+export type AddDraftInspectionItemBeforePhotoInput = {
+  inspectionId: string;
+  itemId: string;
+  storagePath: string;
+  uploadedByAuthUserId: string;
+};
+
+export type RemoveDraftInspectionItemBeforePhotoInput = {
+  inspectionId: string;
+  itemId: string;
+  evidenceId: string;
+};
+
 export type DiscardDraftInspectionInput = {
   inspectionId: string;
 };
@@ -171,6 +184,16 @@ export type DraftInspectionItemRecord = {
   itemDescriptionSnapshot: string | null;
   resultStatus: InspectionItemResultStatus | null;
   resultNote: string | null;
+  beforePhotos: DraftInspectionItemEvidenceRecord[];
+};
+
+export type DraftInspectionItemEvidenceRecord = {
+  id: string;
+  inspectionItemId: string;
+  evidenceType: "before_photo";
+  storagePath: string;
+  uploadedByAuthUserId: string;
+  uploadedAt: Date;
 };
 
 export type DraftAreaInspectionRecord = {
@@ -485,6 +508,22 @@ export function validateDraftInspectionForSubmission(
           errors.items,
           item.id,
           "Enter an issue note for failed items.",
+        );
+      }
+
+      if (item.resultStatus === "fail" && item.beforePhotos.length === 0) {
+        errors.items = addRecordError(
+          errors.items,
+          item.id,
+          "Attach at least one Before Photo for failed items.",
+        );
+      }
+
+      if (item.resultStatus !== "fail" && item.beforePhotos.length > 0) {
+        errors.items = addRecordError(
+          errors.items,
+          item.id,
+          "Before Photos are only allowed for failed items.",
         );
       }
     });

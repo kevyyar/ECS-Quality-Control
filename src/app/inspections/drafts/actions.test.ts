@@ -8,8 +8,13 @@ const {
   skipDraftAreaInspection,
   unskipDraftAreaInspection,
   addOneOffAreaInspection,
+  addDraftInspectionItemBeforePhoto,
   submitDraftInspection,
   discardDraftInspection,
+  removeDraftInspectionItemBeforePhoto,
+  processInspectionPhoto,
+  uploadInspectionEvidencePhoto,
+  removeInspectionEvidencePhoto,
   isActiveBuildingRequiredForDraftError,
   isActiveBuildingInspectionPlanRequiredForDraftError,
   isActiveDraftInspectionAlreadyExistsError,
@@ -25,8 +30,13 @@ const {
   skipDraftAreaInspection: vi.fn(),
   unskipDraftAreaInspection: vi.fn(),
   addOneOffAreaInspection: vi.fn(),
+  addDraftInspectionItemBeforePhoto: vi.fn(),
   submitDraftInspection: vi.fn(),
   discardDraftInspection: vi.fn(),
+  removeDraftInspectionItemBeforePhoto: vi.fn(),
+  processInspectionPhoto: vi.fn(),
+  uploadInspectionEvidencePhoto: vi.fn(),
+  removeInspectionEvidencePhoto: vi.fn(),
   isActiveBuildingRequiredForDraftError: (error: unknown) =>
     error instanceof Error && error.name === "ActiveBuildingRequiredForDraftError",
   isActiveBuildingInspectionPlanRequiredForDraftError: (error: unknown) =>
@@ -49,15 +59,25 @@ const {
 }));
 
 vi.mock("next/cache", () => ({ revalidatePath }));
+vi.mock("server-only", () => ({}));
 vi.mock("@/lib/auth/session", () => ({ requireProtectedAction }));
+vi.mock("@/lib/inspections/evidence/photo-processing", () => ({
+  processInspectionPhoto,
+}));
+vi.mock("@/lib/inspections/evidence/storage", () => ({
+  uploadInspectionEvidencePhoto,
+  removeInspectionEvidencePhoto,
+}));
 vi.mock("@/lib/inspections/drafts/repository", () => ({
   startDraftInspection,
   saveDraftInspectionItemResult,
   skipDraftAreaInspection,
   unskipDraftAreaInspection,
   addOneOffAreaInspection,
+  addDraftInspectionItemBeforePhoto,
   submitDraftInspection,
   discardDraftInspection,
+  removeDraftInspectionItemBeforePhoto,
   isActiveBuildingRequiredForDraftError,
   isActiveBuildingInspectionPlanRequiredForDraftError,
   isActiveDraftInspectionAlreadyExistsError,
@@ -68,8 +88,10 @@ vi.mock("@/lib/inspections/drafts/repository", () => ({
 }));
 
 const {
+  addDraftInspectionItemBeforePhotoAction,
   addOneOffAreaInspectionAction,
   discardDraftInspectionAction,
+  removeDraftInspectionItemBeforePhotoAction,
   saveDraftInspectionItemResultAction,
   skipDraftAreaInspectionAction,
   startDraftInspectionAction,
@@ -83,6 +105,9 @@ const areaInspectionId = "44444444-4444-4444-8444-444444444444";
 const itemId = "55555555-5555-4555-8555-555555555555";
 const areaId = "66666666-6666-4666-8666-666666666666";
 const inspectionTemplateId = "77777777-7777-4777-8777-777777777777";
+const evidenceId = "10101010-1010-4101-8101-101010101010";
+const storagePath = `${draftInspectionId}/${itemId}/photo.jpg`;
+const processedPhoto = { buffer: Buffer.from("processed-photo"), contentType: "image/jpeg" };
 const supervisor = {
   authUserId: "99999999-9999-4999-8999-999999999999",
   email: "supervisor@example.com",
@@ -132,6 +157,17 @@ function validDraftIdentityFormData(): FormData {
   return formData({ inspectionId: draftInspectionId });
 }
 
+function validBeforePhotoFormData(): FormData {
+  const data = formData({ inspectionId: draftInspectionId, itemId });
+  data.set("photo", new File(["photo"], "before.jpg", { type: "image/jpeg" }));
+
+  return data;
+}
+
+function validBeforePhotoRemovalFormData(): FormData {
+  return formData({ inspectionId: draftInspectionId, itemId, evidenceId });
+}
+
 function namedError(name: string): Error {
   const error = new Error(name);
   error.name = name;
@@ -173,6 +209,14 @@ describe("Draft Inspection actions", () => {
     skipDraftAreaInspection.mockResolvedValue({ id: draftInspectionId });
     unskipDraftAreaInspection.mockResolvedValue({ id: draftInspectionId });
     addOneOffAreaInspection.mockResolvedValue({ id: draftInspectionId });
+    processInspectionPhoto.mockResolvedValue(processedPhoto);
+    uploadInspectionEvidencePhoto.mockResolvedValue(storagePath);
+    removeInspectionEvidencePhoto.mockResolvedValue(undefined);
+    addDraftInspectionItemBeforePhoto.mockResolvedValue({ id: draftInspectionId });
+    removeDraftInspectionItemBeforePhoto.mockResolvedValue({
+      draft: { id: draftInspectionId },
+      storagePath,
+    });
     submitDraftInspection.mockResolvedValue({
       id: draftInspectionId,
       status: "submitted",
@@ -354,6 +398,94 @@ describe("Draft Inspection actions", () => {
     });
 
     expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("attaches Before Photos through draft-edit capability", async () => {
+    await expect(
+      addDraftInspectionItemBeforePhotoAction(
+        { status: "idle" },
+        validBeforePhotoFormData(),
+      ),
+    ).resolves.toEqual({
+      status: "success",
+      message: "Before Photo attached.",
+      draftInspectionId,
+    });
+
+    expect(requireProtectedAction).toHaveBeenCalledWith("editDraftInspection");
+    expect(processInspectionPhoto).toHaveBeenCalledWith(expect.any(File));
+    expect(uploadInspectionEvidencePhoto).toHaveBeenCalledWith({
+      inspectionId: draftInspectionId,
+      itemId,
+      photo: processedPhoto,
+    });
+    expect(addDraftInspectionItemBeforePhoto).toHaveBeenCalledWith({
+      inspectionId: draftInspectionId,
+      itemId,
+      storagePath,
+      uploadedByAuthUserId: supervisor.authUserId,
+    });
+    expect(revalidatePath).toHaveBeenCalledWith(`/inspections/drafts/${draftInspectionId}`);
+  });
+
+  it("requires a selected Before Photo before upload", async () => {
+    await expect(
+      addDraftInspectionItemBeforePhotoAction(
+        { status: "idle" },
+        formData({ inspectionId: draftInspectionId, itemId }),
+      ),
+    ).resolves.toEqual({
+      status: "error",
+      errors: { photo: "Choose a Before Photo." },
+      values: { inspectionId: draftInspectionId, itemId },
+    });
+
+    expect(processInspectionPhoto).not.toHaveBeenCalled();
+    expect(uploadInspectionEvidencePhoto).not.toHaveBeenCalled();
+    expect(addDraftInspectionItemBeforePhoto).not.toHaveBeenCalled();
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("removes uploaded Before Photo objects when metadata attach fails", async () => {
+    addDraftInspectionItemBeforePhoto.mockRejectedValueOnce(
+      namedError("DraftInspectionMutationNotAllowedError"),
+    );
+
+    await expect(
+      addDraftInspectionItemBeforePhotoAction(
+        { status: "idle" },
+        validBeforePhotoFormData(),
+      ),
+    ).resolves.toMatchObject({
+      status: "error",
+      errors: {},
+      formError: "Draft Inspection cannot be changed this way.",
+    });
+
+    expect(removeInspectionEvidencePhoto).toHaveBeenCalledWith(storagePath);
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("removes Before Photos using the repository-owned storage path", async () => {
+    await expect(
+      removeDraftInspectionItemBeforePhotoAction(
+        { status: "idle" },
+        validBeforePhotoRemovalFormData(),
+      ),
+    ).resolves.toEqual({
+      status: "success",
+      message: "Before Photo removed.",
+      draftInspectionId,
+    });
+
+    expect(requireProtectedAction).toHaveBeenCalledWith("editDraftInspection");
+    expect(removeDraftInspectionItemBeforePhoto).toHaveBeenCalledWith({
+      inspectionId: draftInspectionId,
+      itemId,
+      evidenceId,
+    });
+    expect(removeInspectionEvidencePhoto).toHaveBeenCalledWith(storagePath);
+    expect(revalidatePath).toHaveBeenCalledWith(`/inspections/drafts/${draftInspectionId}`);
   });
 
   it("skips and unskips planned Area Inspections through draft-edit capability", async () => {

@@ -65,13 +65,16 @@ corepack use pnpm@11.1.2
    pnpm db:migrate
    ```
 
-6. Start the development server:
+6. Ensure the private Supabase Storage bucket from `supabase/config.toml`
+   exists (`inspection-evidence`) before using Draft Inspection photo evidence.
+
+7. Start the development server:
 
    ```bash
    pnpm dev
    ```
 
-7. Open [http://localhost:3000](http://localhost:3000).
+8. Open [http://localhost:3000](http://localhost:3000).
 
 ## Environment variables
 

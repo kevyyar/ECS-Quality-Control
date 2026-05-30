@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 
 import { requireProtectedAction } from "@/lib/auth/session";
 import { listAreas, listInspectionTemplates } from "@/lib/client-building-setup/repository";
+import { createInspectionEvidencePhotoUrl } from "@/lib/inspections/evidence/storage";
 import { getDraftInspection } from "@/lib/inspections/drafts/repository";
 
 import {
@@ -23,12 +24,12 @@ type DraftInspectionDetailPageProps = {
   params: Promise<{ inspectionId: string }>;
 };
 
-function toDraftEditorDraft(
+async function toDraftEditorDraft(
   draft: NonNullable<Awaited<ReturnType<typeof getDraftInspection>>>,
-): DraftEditorDraft {
+): Promise<DraftEditorDraft> {
   return {
     id: draft.id,
-    areaInspections: draft.areaInspections.map((areaInspection) => ({
+    areaInspections: await Promise.all(draft.areaInspections.map(async (areaInspection) => ({
       id: areaInspection.id,
       inspectionId: areaInspection.inspectionId,
       source: areaInspection.source,
@@ -40,7 +41,7 @@ function toDraftEditorDraft(
         areaInspection.inspectionTemplateDescriptionSnapshot,
       isSkipped: areaInspection.isSkipped,
       skipReason: areaInspection.skipReason,
-      items: areaInspection.items.map((item) => ({
+      items: await Promise.all(areaInspection.items.map(async (item) => ({
         id: item.id,
         position: item.position,
         sectionNameSnapshot: item.sectionNameSnapshot,
@@ -48,8 +49,13 @@ function toDraftEditorDraft(
         itemDescriptionSnapshot: item.itemDescriptionSnapshot,
         resultStatus: item.resultStatus,
         resultNote: item.resultNote,
-      })),
-    })),
+        beforePhotos: await Promise.all(item.beforePhotos.map(async (photo) => ({
+          id: photo.id,
+          uploadedAt: photo.uploadedAt.toISOString(),
+          url: await createInspectionEvidencePhotoUrl(photo.storagePath),
+        }))),
+      }))),
+    }))),
   };
 }
 
@@ -85,6 +91,7 @@ export default async function DraftInspectionDetailPage({
     listAreas({ visibility: "active", buildingId: draft.buildingId }),
     listInspectionTemplates({ visibility: "active" }),
   ]);
+  const editorDraft = await toDraftEditorDraft(draft);
 
   return (
     <main className="min-h-screen bg-slate-50 px-6 py-10 text-ink sm:px-10">
@@ -110,7 +117,7 @@ export default async function DraftInspectionDetailPage({
         <DraftInspectionEditor
           activeAreas={toAreaOptions(activeAreas)}
           activeTemplates={toTemplateOptions(activeTemplates)}
-          draft={toDraftEditorDraft(draft)}
+          draft={editorDraft}
         />
       </section>
     </main>

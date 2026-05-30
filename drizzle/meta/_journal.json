@@ -57,6 +57,13 @@
       "when": 1780140000000,
       "tag": "0007_draft_inspection_editing",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1780165769368,
+      "tag": "0008_sleepy_kree",
+      "breakpoints": true
     }
   ]
 }

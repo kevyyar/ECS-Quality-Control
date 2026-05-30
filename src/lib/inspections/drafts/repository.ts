@@ -10,6 +10,7 @@ import {
   buildings,
   clients,
   inspectionAreaInspections,
+  inspectionItemEvidence,
   inspectionItems,
   inspections,
   inspectionTemplateItems,
@@ -26,6 +27,7 @@ import { validateDraftInspectionForSubmission } from "./model";
 import type {
   ActiveDraftInspectionSummaryRecord,
   AddOneOffAreaInspectionInput,
+  AddDraftInspectionItemBeforePhotoInput,
   DiscardDraftInspectionInput,
   DraftAreaInspectionRecord,
   DraftInspectionItemRecord,
@@ -37,12 +39,14 @@ import type {
   SkipDraftAreaInspectionInput,
   StartDraftInspectionInput,
   SubmitDraftInspectionInput,
+  RemoveDraftInspectionItemBeforePhotoInput,
   UnskipDraftAreaInspectionInput,
 } from "./model";
 
 type InspectionRow = typeof inspections.$inferSelect;
 type AreaInspectionRow = typeof inspectionAreaInspections.$inferSelect;
 type InspectionItemRow = typeof inspectionItems.$inferSelect;
+type InspectionItemEvidenceRow = typeof inspectionItemEvidence.$inferSelect;
 
 type BuildingPlanHydrationRow = {
   plan: typeof buildingInspectionPlans.$inferSelect;
@@ -74,6 +78,7 @@ type DraftHydrationRow = {
   inspection: InspectionRow;
   areaInspection: AreaInspectionRow | null;
   item: InspectionItemRow | null;
+  evidence: InspectionItemEvidenceRow | null;
 };
 
 export class ActiveDraftInspectionAlreadyExistsError extends Error {
@@ -286,12 +291,33 @@ function toInspectionItemRecord(row: InspectionItemRow): DraftInspectionItemReco
     itemDescriptionSnapshot: row.itemDescriptionSnapshot,
     resultStatus: row.resultStatus as DraftInspectionItemRecord["resultStatus"],
     resultNote: row.resultNote,
+    beforePhotos: [],
+  };
+}
+
+function toInspectionItemRecordWithEvidence(
+  row: InspectionItemRow,
+  evidenceRows: InspectionItemEvidenceRow[],
+): DraftInspectionItemRecord {
+  return {
+    ...toInspectionItemRecord(row),
+    beforePhotos: evidenceRows
+      .filter((evidence) => evidence.evidenceType === "before_photo")
+      .map((evidence) => ({
+        id: evidence.id,
+        inspectionItemId: evidence.inspectionItemId,
+        evidenceType: "before_photo",
+        storagePath: evidence.storagePath,
+        uploadedByAuthUserId: evidence.uploadedByAuthUserId,
+        uploadedAt: evidence.uploadedAt,
+      })),
   };
 }
 
 function toAreaInspectionRecord(
   row: AreaInspectionRow,
   items: InspectionItemRow[],
+  evidenceRows: InspectionItemEvidenceRow[] = [],
 ): DraftAreaInspectionRecord {
   return {
     id: row.id,
@@ -307,7 +333,12 @@ function toAreaInspectionRecord(
     inspectionTemplateDescriptionSnapshot: row.inspectionTemplateDescriptionSnapshot,
     isSkipped: row.isSkipped,
     skipReason: row.skipReason,
-    items: items.map(toInspectionItemRecord),
+    items: items.map((item) =>
+      toInspectionItemRecordWithEvidence(
+        item,
+        evidenceRows.filter((evidence) => evidence.inspectionItemId === item.id),
+      ),
+    ),
   };
 }
 
@@ -315,6 +346,7 @@ function toDraftInspectionRecord(
   inspection: InspectionRow,
   areaRows: AreaInspectionRow[],
   itemRows: InspectionItemRow[],
+  evidenceRows: InspectionItemEvidenceRow[] = [],
 ): DraftInspectionRecord {
   return {
     id: inspection.id,
@@ -330,6 +362,7 @@ function toDraftInspectionRecord(
       toAreaInspectionRecord(
         areaInspection,
         itemRows.filter((item) => item.areaInspectionId === areaInspection.id),
+        evidenceRows,
       ),
     ),
   };
@@ -346,6 +379,7 @@ function toDraftInspectionRecordFromHydration(
 
   const areaRowsById = new Map<string, AreaInspectionRow>();
   const itemRowsById = new Map<string, InspectionItemRow>();
+  const evidenceRowsById = new Map<string, InspectionItemEvidenceRow>();
 
   rows.forEach((row) => {
     if (row.areaInspection) {
@@ -355,12 +389,17 @@ function toDraftInspectionRecordFromHydration(
     if (row.item) {
       itemRowsById.set(row.item.id, row.item);
     }
+
+    if (row.evidence) {
+      evidenceRowsById.set(row.evidence.id, row.evidence);
+    }
   });
 
   return toDraftInspectionRecord(
     first.inspection,
     Array.from(areaRowsById.values()),
     Array.from(itemRowsById.values()),
+    Array.from(evidenceRowsById.values()),
   );
 }
 
@@ -552,6 +591,7 @@ export async function getDraftInspection(
       inspection: inspections,
       areaInspection: inspectionAreaInspections,
       item: inspectionItems,
+      evidence: inspectionItemEvidence,
     })
     .from(inspections)
     .leftJoin(
@@ -561,6 +601,10 @@ export async function getDraftInspection(
     .leftJoin(
       inspectionItems,
       eq(inspectionItems.areaInspectionId, inspectionAreaInspections.id),
+    )
+    .leftJoin(
+      inspectionItemEvidence,
+      eq(inspectionItemEvidence.inspectionItemId, inspectionItems.id),
     )
     .where(and(eq(inspections.id, id), eq(inspections.status, "draft")))
     .orderBy(asc(inspectionAreaInspections.position), asc(inspectionItems.position));
@@ -585,6 +629,7 @@ export async function saveDraftInspectionItemResult(
         inspection: inspections,
         areaInspection: inspectionAreaInspections,
         item: inspectionItems,
+        evidence: inspectionItemEvidence,
       })
       .from(inspectionItems)
       .innerJoin(
@@ -620,6 +665,11 @@ export async function saveDraftInspectionItemResult(
         updatedAt: sql`now()`,
       })
       .where(eq(inspectionItems.id, input.itemId));
+    if (input.resultStatus !== "fail") {
+      await tx
+        .delete(inspectionItemEvidence)
+        .where(eq(inspectionItemEvidence.inspectionItemId, input.itemId));
+    }
     await tx
       .update(inspections)
       .set({ updatedAt: sql`now()` })
@@ -627,6 +677,124 @@ export async function saveDraftInspectionItemResult(
   });
 
   return requireFreshDraftInspection(input.inspectionId);
+}
+
+export async function addDraftInspectionItemBeforePhoto(
+  input: AddDraftInspectionItemBeforePhotoInput,
+): Promise<DraftInspectionRecord> {
+  if (!isSetupRecordId(input.inspectionId) || !isSetupRecordId(input.itemId)) {
+    throw new DraftInspectionNotFoundError();
+  }
+
+  if (input.storagePath.trim().length === 0) {
+    throw new DraftInspectionMutationNotAllowedError("Photo storage path is required.");
+  }
+
+  const { db } = await import("@/db/client");
+
+  await db.transaction(async (tx) => {
+    const [target] = await tx
+      .select({
+        inspection: inspections,
+        areaInspection: inspectionAreaInspections,
+        item: inspectionItems,
+      })
+      .from(inspectionItems)
+      .innerJoin(
+        inspectionAreaInspections,
+        eq(inspectionItems.areaInspectionId, inspectionAreaInspections.id),
+      )
+      .innerJoin(inspections, eq(inspectionAreaInspections.inspectionId, inspections.id))
+      .where(
+        and(
+          eq(inspections.id, input.inspectionId),
+          eq(inspectionItems.id, input.itemId),
+          eq(inspections.status, "draft"),
+        ),
+      )
+      .for("update")
+      .limit(1);
+
+    if (!target) {
+      throw new DraftInspectionNotFoundError();
+    }
+
+    if (target.areaInspection.isSkipped || target.item.resultStatus !== "fail") {
+      throw new DraftInspectionMutationNotAllowedError(
+        "Before Photos can only be attached to failed Draft Inspection items.",
+      );
+    }
+
+    await tx.insert(inspectionItemEvidence).values({
+      inspectionItemId: input.itemId,
+      evidenceType: "before_photo",
+      storagePath: input.storagePath.trim(),
+      uploadedByAuthUserId: input.uploadedByAuthUserId,
+    });
+    await tx
+      .update(inspections)
+      .set({ updatedAt: sql`now()` })
+      .where(eq(inspections.id, input.inspectionId));
+  });
+
+  return requireFreshDraftInspection(input.inspectionId);
+}
+
+export type RemoveDraftInspectionItemBeforePhotoResult = {
+  draft: DraftInspectionRecord;
+  storagePath: string;
+};
+
+export async function removeDraftInspectionItemBeforePhoto(
+  input: RemoveDraftInspectionItemBeforePhotoInput,
+): Promise<RemoveDraftInspectionItemBeforePhotoResult> {
+  if (
+    !isSetupRecordId(input.inspectionId) ||
+    !isSetupRecordId(input.itemId) ||
+    !isSetupRecordId(input.evidenceId)
+  ) {
+    throw new DraftInspectionNotFoundError();
+  }
+
+  const { db } = await import("@/db/client");
+
+  const storagePath = await db.transaction(async (tx) => {
+    const [target] = await tx
+      .select({ evidence: inspectionItemEvidence })
+      .from(inspectionItemEvidence)
+      .innerJoin(inspectionItems, eq(inspectionItemEvidence.inspectionItemId, inspectionItems.id))
+      .innerJoin(
+        inspectionAreaInspections,
+        eq(inspectionItems.areaInspectionId, inspectionAreaInspections.id),
+      )
+      .innerJoin(inspections, eq(inspectionAreaInspections.inspectionId, inspections.id))
+      .where(
+        and(
+          eq(inspections.id, input.inspectionId),
+          eq(inspectionItems.id, input.itemId),
+          eq(inspectionItemEvidence.id, input.evidenceId),
+          eq(inspections.status, "draft"),
+        ),
+      )
+      .for("update")
+      .limit(1);
+
+    if (!target) {
+      throw new DraftInspectionNotFoundError();
+    }
+
+    await tx
+      .delete(inspectionItemEvidence)
+      .where(eq(inspectionItemEvidence.id, input.evidenceId));
+    await tx
+      .update(inspections)
+      .set({ updatedAt: sql`now()` })
+      .where(eq(inspections.id, input.inspectionId));
+
+    return target.evidence.storagePath;
+  });
+
+  return { draft: await requireFreshDraftInspection(input.inspectionId), storagePath };
 }
 
 export async function skipDraftAreaInspection(
@@ -896,6 +1064,7 @@ export async function submitDraftInspection(
         inspection: inspections,
         areaInspection: inspectionAreaInspections,
         item: inspectionItems,
+        evidence: inspectionItemEvidence,
       })
       .from(inspections)
       .leftJoin(
@@ -905,6 +1074,10 @@ export async function submitDraftInspection(
       .leftJoin(
         inspectionItems,
         eq(inspectionItems.areaInspectionId, inspectionAreaInspections.id),
+      )
+      .leftJoin(
+        inspectionItemEvidence,
+        eq(inspectionItemEvidence.inspectionItemId, inspectionItems.id),
       )
       .where(and(eq(inspections.id, input.inspectionId), eq(inspections.status, "draft")))
       .orderBy(asc(inspectionAreaInspections.position), asc(inspectionItems.position));
@@ -996,6 +1169,7 @@ export async function listActiveDraftInspections(): Promise<
       inspection: inspections,
       areaInspection: inspectionAreaInspections,
       item: inspectionItems,
+      evidence: inspectionItemEvidence,
     })
     .from(inspections)
     .leftJoin(
@@ -1005,6 +1179,10 @@ export async function listActiveDraftInspections(): Promise<
     .leftJoin(
       inspectionItems,
       eq(inspectionItems.areaInspectionId, inspectionAreaInspections.id),
+    )
+    .leftJoin(
+      inspectionItemEvidence,
+      eq(inspectionItemEvidence.inspectionItemId, inspectionItems.id),
     )
     .where(eq(inspections.status, "draft"))
     .orderBy(asc(inspections.startedAt), asc(inspectionAreaInspections.position));
