@@ -287,6 +287,9 @@ export const inspections = pgTable(
     startedAt: timestamp("started_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
+    submittedByAuthUserId: uuid("submitted_by_auth_user_id"),
+    submittedByEmail: varchar("submitted_by_email", { length: 320 }),
+    submittedAt: timestamp("submitted_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -302,6 +305,20 @@ export const inspections = pgTable(
       .on(table.buildingId)
       .where(sql`${table.status} = 'draft'`),
     check("inspections_status_valid", sql`${table.status} in ('draft', 'submitted')`),
+    check(
+      "inspections_submission_metadata_matches_status",
+      sql`(
+        ${table.status} = 'draft'
+        and ${table.submittedByAuthUserId} is null
+        and ${table.submittedByEmail} is null
+        and ${table.submittedAt} is null
+      ) or (
+        ${table.status} = 'submitted'
+        and ${table.submittedByAuthUserId} is not null
+        and ${table.submittedByEmail} is not null
+        and ${table.submittedAt} is not null
+      )`,
+    ),
   ],
 ).enableRLS();
 
@@ -332,6 +349,8 @@ export const inspectionAreaInspections = pgTable(
       "inspection_template_description_snapshot",
       { length: 1000 },
     ),
+    isSkipped: boolean("is_skipped").notNull().default(false),
+    skipReason: varchar("skip_reason", { length: 1000 }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -347,6 +366,17 @@ export const inspectionAreaInspections = pgTable(
     ),
     check("inspection_area_inspections_source_valid", sql`${table.source} in ('planned', 'one_off')`),
     check("inspection_area_inspections_position_positive", sql`${table.position} > 0`),
+    check(
+      "inspection_area_inspections_skip_state_valid",
+      sql`(
+        ${table.isSkipped} = false and ${table.skipReason} is null
+      ) or (
+        ${table.isSkipped} = true
+        and ${table.source} = 'planned'
+        and ${table.skipReason} is not null
+        and length(btrim(${table.skipReason})) > 0
+      )`,
+    ),
   ],
 ).enableRLS();
 
@@ -363,6 +393,8 @@ export const inspectionItems = pgTable(
     sectionNameSnapshot: varchar("section_name_snapshot", { length: 160 }),
     itemNameSnapshot: varchar("item_name_snapshot", { length: 160 }).notNull(),
     itemDescriptionSnapshot: varchar("item_description_snapshot", { length: 1000 }),
+    resultStatus: varchar("result_status", { length: 24 }),
+    resultNote: varchar("result_note", { length: 1000 }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -377,6 +409,61 @@ export const inspectionItems = pgTable(
       table.position,
     ),
     check("inspection_items_position_positive", sql`${table.position} > 0`),
+    check(
+      "inspection_items_result_status_valid",
+      sql`${table.resultStatus} is null or ${table.resultStatus} in ('pass', 'fail', 'not_applicable')`,
+    ),
+    check(
+      "inspection_items_result_note_not_blank",
+      sql`${table.resultNote} is null or length(btrim(${table.resultNote})) > 0`,
+    ),
+  ],
+).enableRLS();
+
+export const tickets = pgTable(
+  "tickets",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    ticketNumber: integer("ticket_number").generatedByDefaultAsIdentity(),
+    status: varchar("status", { length: 24 }).notNull().default("open"),
+    title: varchar("title", { length: 340 }).notNull(),
+    inspectionId: uuid("inspection_id")
+      .notNull()
+      .references(() => inspections.id, { onDelete: "restrict" }),
+    areaInspectionId: uuid("area_inspection_id")
+      .notNull()
+      .references(() => inspectionAreaInspections.id, { onDelete: "restrict" }),
+    inspectionItemId: uuid("inspection_item_id")
+      .notNull()
+      .references(() => inspectionItems.id, { onDelete: "restrict" }),
+    clientId: uuid("client_id")
+      .notNull()
+      .references(() => clients.id, { onDelete: "restrict" }),
+    buildingId: uuid("building_id")
+      .notNull()
+      .references(() => buildings.id, { onDelete: "restrict" }),
+    areaId: uuid("area_id")
+      .notNull()
+      .references(() => areas.id, { onDelete: "restrict" }),
+    createdByAuthUserId: uuid("created_by_auth_user_id").notNull(),
+    createdByEmail: varchar("created_by_email", { length: 320 }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("tickets_status_idx").on(table.status),
+    index("tickets_inspection_id_idx").on(table.inspectionId),
+    index("tickets_client_id_idx").on(table.clientId),
+    index("tickets_building_id_idx").on(table.buildingId),
+    index("tickets_area_id_idx").on(table.areaId),
+    uniqueIndex("tickets_ticket_number_unique").on(table.ticketNumber),
+    uniqueIndex("tickets_inspection_item_id_unique").on(table.inspectionItemId),
+    check("tickets_status_valid", sql`${table.status} in ('open', 'closed')`),
+    check("tickets_title_not_blank", sql`length(btrim(${table.title})) > 0`),
   ],
 ).enableRLS();
 

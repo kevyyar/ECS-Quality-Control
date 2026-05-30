@@ -4,13 +4,29 @@ const {
   revalidatePath,
   requireProtectedAction,
   startDraftInspection,
+  saveDraftInspectionItemResult,
+  skipDraftAreaInspection,
+  unskipDraftAreaInspection,
+  addOneOffAreaInspection,
+  submitDraftInspection,
+  discardDraftInspection,
   isActiveBuildingRequiredForDraftError,
   isActiveBuildingInspectionPlanRequiredForDraftError,
   isActiveDraftInspectionAlreadyExistsError,
+  isActiveOneOffAreaInspectionSetupRequiredError,
+  isDraftInspectionMutationNotAllowedError,
+  isDraftInspectionNotFoundError,
+  isDraftSubmissionValidationError,
 } = vi.hoisted(() => ({
   revalidatePath: vi.fn(),
   requireProtectedAction: vi.fn(),
   startDraftInspection: vi.fn(),
+  saveDraftInspectionItemResult: vi.fn(),
+  skipDraftAreaInspection: vi.fn(),
+  unskipDraftAreaInspection: vi.fn(),
+  addOneOffAreaInspection: vi.fn(),
+  submitDraftInspection: vi.fn(),
+  discardDraftInspection: vi.fn(),
   isActiveBuildingRequiredForDraftError: (error: unknown) =>
     error instanceof Error && error.name === "ActiveBuildingRequiredForDraftError",
   isActiveBuildingInspectionPlanRequiredForDraftError: (error: unknown) =>
@@ -18,21 +34,55 @@ const {
     error.name === "ActiveBuildingInspectionPlanRequiredForDraftError",
   isActiveDraftInspectionAlreadyExistsError: (error: unknown) =>
     error instanceof Error && error.name === "ActiveDraftInspectionAlreadyExistsError",
+  isActiveOneOffAreaInspectionSetupRequiredError: (
+    error: unknown,
+  ): error is Error & { fields: Partial<Record<"areaId" | "inspectionTemplateId", string>> } =>
+    error instanceof Error && error.name === "ActiveOneOffAreaInspectionSetupRequiredError",
+  isDraftInspectionMutationNotAllowedError: (error: unknown) =>
+    error instanceof Error && error.name === "DraftInspectionMutationNotAllowedError",
+  isDraftInspectionNotFoundError: (error: unknown) =>
+    error instanceof Error && error.name === "DraftInspectionNotFoundError",
+  isDraftSubmissionValidationError: (
+    error: unknown,
+  ): error is Error & { validation: { ok: false; errors: { inspection?: string } } } =>
+    error instanceof Error && error.name === "DraftSubmissionValidationError",
 }));
 
 vi.mock("next/cache", () => ({ revalidatePath }));
 vi.mock("@/lib/auth/session", () => ({ requireProtectedAction }));
 vi.mock("@/lib/inspections/drafts/repository", () => ({
   startDraftInspection,
+  saveDraftInspectionItemResult,
+  skipDraftAreaInspection,
+  unskipDraftAreaInspection,
+  addOneOffAreaInspection,
+  submitDraftInspection,
+  discardDraftInspection,
   isActiveBuildingRequiredForDraftError,
   isActiveBuildingInspectionPlanRequiredForDraftError,
   isActiveDraftInspectionAlreadyExistsError,
+  isActiveOneOffAreaInspectionSetupRequiredError,
+  isDraftInspectionMutationNotAllowedError,
+  isDraftInspectionNotFoundError,
+  isDraftSubmissionValidationError,
 }));
 
-const { startDraftInspectionAction } = await import("./actions");
+const {
+  addOneOffAreaInspectionAction,
+  discardDraftInspectionAction,
+  saveDraftInspectionItemResultAction,
+  skipDraftAreaInspectionAction,
+  startDraftInspectionAction,
+  submitDraftInspectionAction,
+  unskipDraftAreaInspectionAction,
+} = await import("./actions");
 
 const buildingId = "33333333-3333-4333-8333-333333333333";
 const draftInspectionId = "abababab-abab-4aba-8aba-abababababab";
+const areaInspectionId = "44444444-4444-4444-8444-444444444444";
+const itemId = "55555555-5555-4555-8555-555555555555";
+const areaId = "66666666-6666-4666-8666-666666666666";
+const inspectionTemplateId = "77777777-7777-4777-8777-777777777777";
 const supervisor = {
   authUserId: "99999999-9999-4999-8999-999999999999",
   email: "supervisor@example.com",
@@ -53,9 +103,63 @@ function validDraftFormData(): FormData {
   return formData({ buildingId });
 }
 
+function validItemResultFormData(): FormData {
+  return formData({
+    inspectionId: draftInspectionId,
+    itemId,
+    resultStatus: "fail",
+    resultNote: "  Repair dispenser  ",
+  });
+}
+
+function validSkipFormData(): FormData {
+  return formData({
+    inspectionId: draftInspectionId,
+    areaInspectionId,
+    skipReason: "  Tenant closed area  ",
+  });
+}
+
+function validAreaInspectionIdentityFormData(): FormData {
+  return formData({ inspectionId: draftInspectionId, areaInspectionId });
+}
+
+function validOneOffFormData(): FormData {
+  return formData({ inspectionId: draftInspectionId, areaId, inspectionTemplateId });
+}
+
+function validDraftIdentityFormData(): FormData {
+  return formData({ inspectionId: draftInspectionId });
+}
+
 function namedError(name: string): Error {
   const error = new Error(name);
   error.name = name;
+
+  return error;
+}
+
+function oneOffSetupError(
+  fields: Partial<Record<"areaId" | "inspectionTemplateId", string>>,
+): Error & { fields: Partial<Record<"areaId" | "inspectionTemplateId", string>> } {
+  const error = namedError("ActiveOneOffAreaInspectionSetupRequiredError") as Error & {
+    fields: Partial<Record<"areaId" | "inspectionTemplateId", string>>;
+  };
+  error.fields = fields;
+
+  return error;
+}
+
+function submissionValidationError(): Error & {
+  validation: { ok: false; errors: { inspection: string } };
+} {
+  const error = namedError("DraftSubmissionValidationError") as Error & {
+    validation: { ok: false; errors: { inspection: string } };
+  };
+  error.validation = {
+    ok: false,
+    errors: { inspection: "Submit at least one non-skipped Area Inspection." },
+  };
 
   return error;
 }
@@ -64,10 +168,17 @@ describe("Draft Inspection actions", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     requireProtectedAction.mockResolvedValue(supervisor);
-    startDraftInspection.mockResolvedValue({
+    startDraftInspection.mockResolvedValue({ id: draftInspectionId, buildingId });
+    saveDraftInspectionItemResult.mockResolvedValue({ id: draftInspectionId });
+    skipDraftAreaInspection.mockResolvedValue({ id: draftInspectionId });
+    unskipDraftAreaInspection.mockResolvedValue({ id: draftInspectionId });
+    addOneOffAreaInspection.mockResolvedValue({ id: draftInspectionId });
+    submitDraftInspection.mockResolvedValue({
       id: draftInspectionId,
-      buildingId,
+      status: "submitted",
+      ticketCount: 1,
     });
+    discardDraftInspection.mockResolvedValue({ discardedInspectionId: draftInspectionId });
   });
 
   it("requires Supervisor draft-edit capability before starting a Draft Inspection", async () => {
@@ -168,5 +279,214 @@ describe("Draft Inspection actions", () => {
     expect(revalidatePath).toHaveBeenCalledWith(
       `/inspections/drafts/${draftInspectionId}`,
     );
+  });
+
+  it("saves normalized item results through the draft-edit capability", async () => {
+    await expect(
+      saveDraftInspectionItemResultAction({ status: "idle" }, validItemResultFormData()),
+    ).resolves.toEqual({
+      status: "success",
+      message: "Item result saved.",
+      draftInspectionId,
+    });
+
+    expect(requireProtectedAction).toHaveBeenCalledWith("editDraftInspection");
+    expect(saveDraftInspectionItemResult).toHaveBeenCalledWith({
+      inspectionId: draftInspectionId,
+      itemId,
+      resultStatus: "fail",
+      resultNote: "Repair dispenser",
+    });
+    expect(revalidatePath).toHaveBeenCalledWith(`/inspections/drafts/${draftInspectionId}`);
+  });
+
+  it("does not save item results when Manager-only users fail draft-edit capability", async () => {
+    requireProtectedAction.mockRejectedValueOnce(new Error("redirect:/forbidden"));
+
+    await expect(
+      saveDraftInspectionItemResultAction({ status: "idle" }, validItemResultFormData()),
+    ).rejects.toThrow("redirect:/forbidden");
+
+    expect(saveDraftInspectionItemResult).not.toHaveBeenCalled();
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("returns item result field errors without saving invalid input", async () => {
+    await expect(
+      saveDraftInspectionItemResultAction(
+        { status: "idle" },
+        formData({
+          inspectionId: draftInspectionId,
+          itemId: "not-an-item",
+          resultStatus: "maybe",
+          resultNote: "",
+        }),
+      ),
+    ).resolves.toEqual({
+      status: "error",
+      errors: {
+        itemId: "Select an inspection item.",
+        resultStatus: "Select Pass, Fail, Not Applicable, or Unanswered.",
+      },
+      values: {
+        inspectionId: draftInspectionId,
+        itemId: "not-an-item",
+        resultStatus: "maybe",
+        resultNote: "",
+      },
+    });
+
+    expect(saveDraftInspectionItemResult).not.toHaveBeenCalled();
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("maps skipped item edits to a form error", async () => {
+    saveDraftInspectionItemResult.mockRejectedValueOnce(
+      namedError("DraftInspectionMutationNotAllowedError"),
+    );
+
+    await expect(
+      saveDraftInspectionItemResultAction({ status: "idle" }, validItemResultFormData()),
+    ).resolves.toMatchObject({
+      status: "error",
+      errors: {},
+      formError: "Draft Inspection cannot be changed this way.",
+    });
+
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("skips and unskips planned Area Inspections through draft-edit capability", async () => {
+    await expect(
+      skipDraftAreaInspectionAction({ status: "idle" }, validSkipFormData()),
+    ).resolves.toEqual({
+      status: "success",
+      message: "Area Inspection skipped.",
+      draftInspectionId,
+    });
+
+    expect(skipDraftAreaInspection).toHaveBeenCalledWith({
+      inspectionId: draftInspectionId,
+      areaInspectionId,
+      skipReason: "Tenant closed area",
+    });
+
+    await expect(
+      unskipDraftAreaInspectionAction(
+        { status: "idle" },
+        validAreaInspectionIdentityFormData(),
+      ),
+    ).resolves.toEqual({
+      status: "success",
+      message: "Area Inspection unskipped.",
+      draftInspectionId,
+    });
+
+    expect(unskipDraftAreaInspection).toHaveBeenCalledWith({
+      inspectionId: draftInspectionId,
+      areaInspectionId,
+    });
+    expect(requireProtectedAction).toHaveBeenCalledWith("editDraftInspection");
+  });
+
+  it("adds one-off Area Inspections and maps inactive setup errors", async () => {
+    addOneOffAreaInspection.mockRejectedValueOnce(
+      oneOffSetupError({ areaId: "Select an active Area for this Building." }),
+    );
+
+    await expect(
+      addOneOffAreaInspectionAction({ status: "idle" }, validOneOffFormData()),
+    ).resolves.toEqual({
+      status: "error",
+      errors: { areaId: "Select an active Area for this Building." },
+      values: { inspectionId: draftInspectionId, areaId, inspectionTemplateId },
+    });
+
+    expect(revalidatePath).not.toHaveBeenCalled();
+
+    addOneOffAreaInspection.mockResolvedValueOnce({ id: draftInspectionId });
+
+    await expect(
+      addOneOffAreaInspectionAction({ status: "idle" }, validOneOffFormData()),
+    ).resolves.toEqual({
+      status: "success",
+      message: "One-off Area Inspection added.",
+      draftInspectionId,
+    });
+  });
+
+  it("submits valid Draft Inspections through submit capability", async () => {
+    await expect(
+      submitDraftInspectionAction({ status: "idle" }, validDraftIdentityFormData()),
+    ).resolves.toEqual({
+      status: "success",
+      message: "Draft Inspection submitted. 1 Ticket created.",
+      submittedInspectionId: draftInspectionId,
+      ticketCount: 1,
+    });
+
+    expect(requireProtectedAction).toHaveBeenCalledWith("submitDraftInspection");
+    expect(submitDraftInspection).toHaveBeenCalledWith(
+      { inspectionId: draftInspectionId },
+      supervisor,
+    );
+    expect(revalidatePath).toHaveBeenCalledWith(`/inspections/drafts/${draftInspectionId}`);
+  });
+
+  it("returns submission validation errors without revalidating unchanged Drafts", async () => {
+    submitDraftInspection.mockRejectedValueOnce(submissionValidationError());
+
+    await expect(
+      submitDraftInspectionAction({ status: "idle" }, validDraftIdentityFormData()),
+    ).resolves.toEqual({
+      status: "error",
+      errors: {},
+      values: { inspectionId: draftInspectionId },
+      validation: {
+        ok: false,
+        errors: { inspection: "Submit at least one non-skipped Area Inspection." },
+      },
+    });
+
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("does not submit when Manager-only users fail submit capability", async () => {
+    requireProtectedAction.mockRejectedValueOnce(new Error("redirect:/forbidden"));
+
+    await expect(
+      submitDraftInspectionAction({ status: "idle" }, validDraftIdentityFormData()),
+    ).rejects.toThrow("redirect:/forbidden");
+
+    expect(submitDraftInspection).not.toHaveBeenCalled();
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("discards Draft Inspections through draft-edit capability", async () => {
+    await expect(
+      discardDraftInspectionAction({ status: "idle" }, validDraftIdentityFormData()),
+    ).resolves.toEqual({
+      status: "success",
+      message: "Draft Inspection discarded.",
+      discardedInspectionId: draftInspectionId,
+    });
+
+    expect(requireProtectedAction).toHaveBeenCalledWith("editDraftInspection");
+    expect(discardDraftInspection).toHaveBeenCalledWith({ inspectionId: draftInspectionId });
+    expect(revalidatePath).toHaveBeenCalledWith(`/inspections/drafts/${draftInspectionId}`);
+  });
+
+  it("maps missing Draft mutations to form errors", async () => {
+    discardDraftInspection.mockRejectedValueOnce(namedError("DraftInspectionNotFoundError"));
+
+    await expect(
+      discardDraftInspectionAction({ status: "idle" }, validDraftIdentityFormData()),
+    ).resolves.toMatchObject({
+      status: "error",
+      errors: {},
+      formError: "Draft Inspection was not found.",
+    });
+
+    expect(revalidatePath).not.toHaveBeenCalled();
   });
 });

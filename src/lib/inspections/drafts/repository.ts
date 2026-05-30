@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 
 import {
   areas,
@@ -15,19 +15,29 @@ import {
   inspectionTemplateItems,
   inspectionTemplateSections,
   inspectionTemplates,
+  tickets,
 } from "@/db/schema";
 import {
   isBuildingInspectionPlanEntryActive,
   isSetupRecordId,
 } from "@/lib/client-building-setup/model";
 
+import { validateDraftInspectionForSubmission } from "./model";
 import type {
   ActiveDraftInspectionSummaryRecord,
+  AddOneOffAreaInspectionInput,
+  DiscardDraftInspectionInput,
   DraftAreaInspectionRecord,
   DraftInspectionItemRecord,
   DraftInspectionRecord,
   DraftInspectionStarter,
+  DraftSubmissionValidation,
+  InspectionItemResultStatus,
+  SaveDraftInspectionItemResultInput,
+  SkipDraftAreaInspectionInput,
   StartDraftInspectionInput,
+  SubmitDraftInspectionInput,
+  UnskipDraftAreaInspectionInput,
 } from "./model";
 
 type InspectionRow = typeof inspections.$inferSelect;
@@ -51,6 +61,13 @@ type BuildingPlanHydrationRow = {
 type TemplateItemHydrationRow = {
   item: typeof inspectionTemplateItems.$inferSelect;
   section: Pick<typeof inspectionTemplateSections.$inferSelect, "id" | "name"> | null;
+};
+
+type OneOffAreaHydrationRow = {
+  area: typeof areas.$inferSelect;
+  areaType: typeof areaTypes.$inferSelect;
+  building: Pick<typeof buildings.$inferSelect, "id" | "archivedAt">;
+  client: Pick<typeof clients.$inferSelect, "id" | "archivedAt">;
 };
 
 type DraftHydrationRow = {
@@ -101,6 +118,64 @@ export function isActiveBuildingRequiredForDraftError(
   return error instanceof ActiveBuildingRequiredForDraftError;
 }
 
+export class DraftInspectionNotFoundError extends Error {
+  constructor() {
+    super("Draft Inspection was not found.");
+    this.name = "DraftInspectionNotFoundError";
+  }
+}
+
+export function isDraftInspectionNotFoundError(
+  error: unknown,
+): error is DraftInspectionNotFoundError {
+  return error instanceof DraftInspectionNotFoundError;
+}
+
+export class DraftInspectionMutationNotAllowedError extends Error {
+  constructor(message = "Draft Inspection cannot be changed this way.") {
+    super(message);
+    this.name = "DraftInspectionMutationNotAllowedError";
+  }
+}
+
+export function isDraftInspectionMutationNotAllowedError(
+  error: unknown,
+): error is DraftInspectionMutationNotAllowedError {
+  return error instanceof DraftInspectionMutationNotAllowedError;
+}
+
+export class DraftSubmissionValidationError extends Error {
+  readonly validation: DraftSubmissionValidation;
+
+  constructor(validation: DraftSubmissionValidation) {
+    super("Draft Inspection is not ready to submit.");
+    this.name = "DraftSubmissionValidationError";
+    this.validation = validation;
+  }
+}
+
+export function isDraftSubmissionValidationError(
+  error: unknown,
+): error is DraftSubmissionValidationError {
+  return error instanceof DraftSubmissionValidationError;
+}
+
+export class ActiveOneOffAreaInspectionSetupRequiredError extends Error {
+  readonly fields: Partial<Record<"areaId" | "inspectionTemplateId", string>>;
+
+  constructor(fields: Partial<Record<"areaId" | "inspectionTemplateId", string>>) {
+    super("One-off Area Inspection requires active setup records.");
+    this.name = "ActiveOneOffAreaInspectionSetupRequiredError";
+    this.fields = fields;
+  }
+}
+
+export function isActiveOneOffAreaInspectionSetupRequiredError(
+  error: unknown,
+): error is ActiveOneOffAreaInspectionSetupRequiredError {
+  return error instanceof ActiveOneOffAreaInspectionSetupRequiredError;
+}
+
 function activePlanEntries(rows: BuildingPlanHydrationRow[]): BuildingPlanHydrationRow[] {
   return rows.filter((row) => {
     if (!row.entry || !row.area || !row.areaType || !row.inspectionTemplate) {
@@ -121,6 +196,84 @@ function uniqueIds(ids: string[]): string[] {
   return Array.from(new Set(ids));
 }
 
+function nullableText(value: string): string | null {
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+async function requireFreshDraftInspection(id: string): Promise<DraftInspectionRecord> {
+  const draft = await getDraftInspection(id);
+
+  if (!draft) {
+    throw new DraftInspectionNotFoundError();
+  }
+
+  return draft;
+}
+
+function templateItemsByTemplateId(
+  rows: TemplateItemHydrationRow[],
+): Map<string, TemplateItemHydrationRow[]> {
+  const itemsByTemplateId = new Map<string, TemplateItemHydrationRow[]>();
+
+  rows.forEach((row) => {
+    const rowsForTemplate = itemsByTemplateId.get(row.item.templateId) ?? [];
+    rowsForTemplate.push(row);
+    itemsByTemplateId.set(row.item.templateId, rowsForTemplate);
+  });
+
+  return itemsByTemplateId;
+}
+
+function oneOffSetupError(
+  field: "areaId" | "inspectionTemplateId",
+): ActiveOneOffAreaInspectionSetupRequiredError {
+  if (field === "areaId") {
+    return new ActiveOneOffAreaInspectionSetupRequiredError({
+      areaId: "Select an active Area.",
+    });
+  }
+
+  return new ActiveOneOffAreaInspectionSetupRequiredError({
+    inspectionTemplateId: "Select an active Inspection Template.",
+  });
+}
+
+const inspectionItemResultStatuses = new Set<InspectionItemResultStatus>([
+  "pass",
+  "fail",
+  "not_applicable",
+]);
+
+function assertValidItemResultInput(input: SaveDraftInspectionItemResultInput): void {
+  if (
+    input.resultStatus !== null &&
+    !inspectionItemResultStatuses.has(input.resultStatus)
+  ) {
+    throw new DraftInspectionMutationNotAllowedError("Select a valid item result.");
+  }
+
+  if (input.resultNote.length > 1000) {
+    throw new DraftInspectionMutationNotAllowedError(
+      "Item result notes must be 1,000 characters or fewer.",
+    );
+  }
+}
+
+function assertValidSkipReason(skipReason: string): void {
+  const trimmed = skipReason.trim();
+
+  if (trimmed.length === 0) {
+    throw new DraftInspectionMutationNotAllowedError("Enter a skip reason.");
+  }
+
+  if (trimmed.length > 1000) {
+    throw new DraftInspectionMutationNotAllowedError(
+      "Skip reason must be 1,000 characters or fewer.",
+    );
+  }
+}
+
 function toInspectionItemRecord(row: InspectionItemRow): DraftInspectionItemRecord {
   return {
     id: row.id,
@@ -131,6 +284,8 @@ function toInspectionItemRecord(row: InspectionItemRow): DraftInspectionItemReco
     sectionNameSnapshot: row.sectionNameSnapshot,
     itemNameSnapshot: row.itemNameSnapshot,
     itemDescriptionSnapshot: row.itemDescriptionSnapshot,
+    resultStatus: row.resultStatus as DraftInspectionItemRecord["resultStatus"],
+    resultNote: row.resultNote,
   };
 }
 
@@ -150,6 +305,8 @@ function toAreaInspectionRecord(
     areaTypeNameSnapshot: row.areaTypeNameSnapshot,
     inspectionTemplateNameSnapshot: row.inspectionTemplateNameSnapshot,
     inspectionTemplateDescriptionSnapshot: row.inspectionTemplateDescriptionSnapshot,
+    isSkipped: row.isSkipped,
+    skipReason: row.skipReason,
     items: items.map(toInspectionItemRecord),
   };
 }
@@ -311,13 +468,7 @@ export async function startDraftInspection(
       )
       .where(inArray(inspectionTemplateItems.templateId, templateIds))
       .orderBy(asc(inspectionTemplateItems.templateId), asc(inspectionTemplateItems.position));
-    const itemsByTemplateId = new Map<string, TemplateItemHydrationRow[]>();
-
-    templateItemRows.forEach((row) => {
-      const rows = itemsByTemplateId.get(row.item.templateId) ?? [];
-      rows.push(row);
-      itemsByTemplateId.set(row.item.templateId, rows);
-    });
+    const itemsByTemplateId = templateItemsByTemplateId(templateItemRows);
 
     const [savedInspection] = await tx
       .insert(inspections)
@@ -415,6 +566,425 @@ export async function getDraftInspection(
     .orderBy(asc(inspectionAreaInspections.position), asc(inspectionItems.position));
 
   return toDraftInspectionRecordFromHydration(rows);
+}
+
+export async function saveDraftInspectionItemResult(
+  input: SaveDraftInspectionItemResultInput,
+): Promise<DraftInspectionRecord> {
+  if (!isSetupRecordId(input.inspectionId) || !isSetupRecordId(input.itemId)) {
+    throw new DraftInspectionNotFoundError();
+  }
+
+  assertValidItemResultInput(input);
+
+  const { db } = await import("@/db/client");
+
+  await db.transaction(async (tx) => {
+    const [target] = await tx
+      .select({
+        inspection: inspections,
+        areaInspection: inspectionAreaInspections,
+        item: inspectionItems,
+      })
+      .from(inspectionItems)
+      .innerJoin(
+        inspectionAreaInspections,
+        eq(inspectionItems.areaInspectionId, inspectionAreaInspections.id),
+      )
+      .innerJoin(inspections, eq(inspectionAreaInspections.inspectionId, inspections.id))
+      .where(
+        and(
+          eq(inspections.id, input.inspectionId),
+          eq(inspectionItems.id, input.itemId),
+          eq(inspections.status, "draft"),
+        ),
+      )
+      .for("update")
+      .limit(1);
+
+    if (!target) {
+      throw new DraftInspectionNotFoundError();
+    }
+
+    if (target.areaInspection.isSkipped) {
+      throw new DraftInspectionMutationNotAllowedError(
+        "Skipped Area Inspection items cannot be edited.",
+      );
+    }
+
+    await tx
+      .update(inspectionItems)
+      .set({
+        resultStatus: input.resultStatus,
+        resultNote: input.resultStatus === null ? null : nullableText(input.resultNote),
+        updatedAt: sql`now()`,
+      })
+      .where(eq(inspectionItems.id, input.itemId));
+    await tx
+      .update(inspections)
+      .set({ updatedAt: sql`now()` })
+      .where(eq(inspections.id, input.inspectionId));
+  });
+
+  return requireFreshDraftInspection(input.inspectionId);
+}
+
+export async function skipDraftAreaInspection(
+  input: SkipDraftAreaInspectionInput,
+): Promise<DraftInspectionRecord> {
+  if (!isSetupRecordId(input.inspectionId) || !isSetupRecordId(input.areaInspectionId)) {
+    throw new DraftInspectionNotFoundError();
+  }
+
+  assertValidSkipReason(input.skipReason);
+
+  const { db } = await import("@/db/client");
+
+  await db.transaction(async (tx) => {
+    const [target] = await tx
+      .select({ areaInspection: inspectionAreaInspections })
+      .from(inspectionAreaInspections)
+      .innerJoin(inspections, eq(inspectionAreaInspections.inspectionId, inspections.id))
+      .where(
+        and(
+          eq(inspections.id, input.inspectionId),
+          eq(inspectionAreaInspections.id, input.areaInspectionId),
+          eq(inspections.status, "draft"),
+        ),
+      )
+      .for("update")
+      .limit(1);
+
+    if (!target) {
+      throw new DraftInspectionNotFoundError();
+    }
+
+    if (target.areaInspection.source !== "planned") {
+      throw new DraftInspectionMutationNotAllowedError(
+        "Only planned Area Inspections can be skipped.",
+      );
+    }
+
+    await tx
+      .update(inspectionAreaInspections)
+      .set({
+        isSkipped: true,
+        skipReason: input.skipReason.trim(),
+        updatedAt: sql`now()`,
+      })
+      .where(eq(inspectionAreaInspections.id, input.areaInspectionId));
+    await tx
+      .update(inspectionItems)
+      .set({ resultStatus: null, resultNote: null, updatedAt: sql`now()` })
+      .where(eq(inspectionItems.areaInspectionId, input.areaInspectionId));
+    await tx
+      .update(inspections)
+      .set({ updatedAt: sql`now()` })
+      .where(eq(inspections.id, input.inspectionId));
+  });
+
+  return requireFreshDraftInspection(input.inspectionId);
+}
+
+export async function unskipDraftAreaInspection(
+  input: UnskipDraftAreaInspectionInput,
+): Promise<DraftInspectionRecord> {
+  if (!isSetupRecordId(input.inspectionId) || !isSetupRecordId(input.areaInspectionId)) {
+    throw new DraftInspectionNotFoundError();
+  }
+
+  const { db } = await import("@/db/client");
+
+  await db.transaction(async (tx) => {
+    const [target] = await tx
+      .select({ areaInspection: inspectionAreaInspections })
+      .from(inspectionAreaInspections)
+      .innerJoin(inspections, eq(inspectionAreaInspections.inspectionId, inspections.id))
+      .where(
+        and(
+          eq(inspections.id, input.inspectionId),
+          eq(inspectionAreaInspections.id, input.areaInspectionId),
+          eq(inspections.status, "draft"),
+        ),
+      )
+      .for("update")
+      .limit(1);
+
+    if (!target) {
+      throw new DraftInspectionNotFoundError();
+    }
+
+    if (target.areaInspection.source !== "planned") {
+      throw new DraftInspectionMutationNotAllowedError(
+        "Only planned Area Inspections can be unskipped.",
+      );
+    }
+
+    await tx
+      .update(inspectionAreaInspections)
+      .set({ isSkipped: false, skipReason: null, updatedAt: sql`now()` })
+      .where(eq(inspectionAreaInspections.id, input.areaInspectionId));
+    await tx
+      .update(inspections)
+      .set({ updatedAt: sql`now()` })
+      .where(eq(inspections.id, input.inspectionId));
+  });
+
+  return requireFreshDraftInspection(input.inspectionId);
+}
+
+export async function addOneOffAreaInspection(
+  input: AddOneOffAreaInspectionInput,
+): Promise<DraftInspectionRecord> {
+  if (!isSetupRecordId(input.inspectionId)) {
+    throw new DraftInspectionNotFoundError();
+  }
+
+  if (!isSetupRecordId(input.areaId)) {
+    throw oneOffSetupError("areaId");
+  }
+
+  if (!isSetupRecordId(input.inspectionTemplateId)) {
+    throw oneOffSetupError("inspectionTemplateId");
+  }
+
+  const { db } = await import("@/db/client");
+
+  await db.transaction(async (tx) => {
+    const [draft] = await tx
+      .select()
+      .from(inspections)
+      .where(and(eq(inspections.id, input.inspectionId), eq(inspections.status, "draft")))
+      .for("update")
+      .limit(1);
+
+    if (!draft) {
+      throw new DraftInspectionNotFoundError();
+    }
+
+    const [areaRow]: OneOffAreaHydrationRow[] = await tx
+      .select({
+        area: areas,
+        areaType: areaTypes,
+        building: { id: buildings.id, archivedAt: buildings.archivedAt },
+        client: { id: clients.id, archivedAt: clients.archivedAt },
+      })
+      .from(areas)
+      .innerJoin(areaTypes, eq(areas.areaTypeId, areaTypes.id))
+      .innerJoin(buildings, eq(areas.buildingId, buildings.id))
+      .innerJoin(clients, eq(buildings.clientId, clients.id))
+      .where(eq(areas.id, input.areaId))
+      .limit(1);
+
+    if (
+      !areaRow ||
+      areaRow.area.buildingId !== draft.buildingId ||
+      areaRow.area.archivedAt !== null ||
+      areaRow.areaType.archivedAt !== null ||
+      areaRow.building.archivedAt !== null ||
+      areaRow.client.archivedAt !== null
+    ) {
+      throw oneOffSetupError("areaId");
+    }
+
+    const [template] = await tx
+      .select()
+      .from(inspectionTemplates)
+      .where(eq(inspectionTemplates.id, input.inspectionTemplateId))
+      .limit(1);
+
+    if (!template || template.archivedAt !== null) {
+      throw oneOffSetupError("inspectionTemplateId");
+    }
+
+    const templateItemRows: TemplateItemHydrationRow[] = await tx
+      .select({
+        item: inspectionTemplateItems,
+        section: {
+          id: inspectionTemplateSections.id,
+          name: inspectionTemplateSections.name,
+        },
+      })
+      .from(inspectionTemplateItems)
+      .leftJoin(
+        inspectionTemplateSections,
+        eq(inspectionTemplateItems.sectionId, inspectionTemplateSections.id),
+      )
+      .where(eq(inspectionTemplateItems.templateId, input.inspectionTemplateId))
+      .orderBy(asc(inspectionTemplateItems.position));
+
+    if (templateItemRows.length === 0) {
+      throw oneOffSetupError("inspectionTemplateId");
+    }
+
+    const [lastAreaInspection] = await tx
+      .select({ position: inspectionAreaInspections.position })
+      .from(inspectionAreaInspections)
+      .where(eq(inspectionAreaInspections.inspectionId, input.inspectionId))
+      .orderBy(desc(inspectionAreaInspections.position));
+    const nextPosition = (lastAreaInspection?.position ?? 0) + 1;
+    const [savedAreaInspection] = await tx
+      .insert(inspectionAreaInspections)
+      .values({
+        inspectionId: input.inspectionId,
+        source: "one_off",
+        position: nextPosition,
+        areaId: areaRow.area.id,
+        areaTypeId: areaRow.areaType.id,
+        inspectionTemplateId: template.id,
+        areaNameSnapshot: areaRow.area.name,
+        areaTypeNameSnapshot: areaRow.areaType.name,
+        inspectionTemplateNameSnapshot: template.name,
+        inspectionTemplateDescriptionSnapshot: template.description,
+      })
+      .returning();
+
+    if (!savedAreaInspection) {
+      throw new Error("One-off Area Inspection could not be added.");
+    }
+
+    await tx.insert(inspectionItems).values(
+      templateItemRows.map((row, index) => ({
+        areaInspectionId: savedAreaInspection.id,
+        sourceTemplateItemId: row.item.id,
+        sourceTemplateSectionId: row.section?.id ?? null,
+        position: index + 1,
+        sectionNameSnapshot: row.section?.name ?? null,
+        itemNameSnapshot: row.item.name,
+        itemDescriptionSnapshot: row.item.description,
+      })),
+    );
+    await tx
+      .update(inspections)
+      .set({ updatedAt: sql`now()` })
+      .where(eq(inspections.id, input.inspectionId));
+  });
+
+  return requireFreshDraftInspection(input.inspectionId);
+}
+
+export type SubmittedDraftInspectionResult = {
+  id: string;
+  status: "submitted";
+  ticketCount: number;
+};
+
+export async function submitDraftInspection(
+  input: SubmitDraftInspectionInput,
+  submitter: DraftInspectionStarter,
+): Promise<SubmittedDraftInspectionResult> {
+  if (!isSetupRecordId(input.inspectionId)) {
+    throw new DraftInspectionNotFoundError();
+  }
+
+  const { db } = await import("@/db/client");
+
+  return db.transaction(async (tx) => {
+    const [inspection] = await tx
+      .select()
+      .from(inspections)
+      .where(and(eq(inspections.id, input.inspectionId), eq(inspections.status, "draft")))
+      .for("update")
+      .limit(1);
+
+    if (!inspection) {
+      throw new DraftInspectionNotFoundError();
+    }
+
+    const rows: DraftHydrationRow[] = await tx
+      .select({
+        inspection: inspections,
+        areaInspection: inspectionAreaInspections,
+        item: inspectionItems,
+      })
+      .from(inspections)
+      .leftJoin(
+        inspectionAreaInspections,
+        eq(inspectionAreaInspections.inspectionId, inspections.id),
+      )
+      .leftJoin(
+        inspectionItems,
+        eq(inspectionItems.areaInspectionId, inspectionAreaInspections.id),
+      )
+      .where(and(eq(inspections.id, input.inspectionId), eq(inspections.status, "draft")))
+      .orderBy(asc(inspectionAreaInspections.position), asc(inspectionItems.position));
+    const draft = toDraftInspectionRecordFromHydration(rows);
+
+    if (!draft) {
+      throw new DraftInspectionNotFoundError();
+    }
+
+    const validation = validateDraftInspectionForSubmission(draft);
+
+    if (!validation.ok) {
+      throw new DraftSubmissionValidationError(validation);
+    }
+
+    await tx
+      .update(inspections)
+      .set({
+        status: "submitted",
+        submittedByAuthUserId: submitter.authUserId,
+        submittedByEmail: submitter.email,
+        submittedAt: sql`now()`,
+        updatedAt: sql`now()`,
+      })
+      .where(eq(inspections.id, input.inspectionId));
+
+    const ticketInputs = draft.areaInspections.flatMap((areaInspection) => {
+      if (areaInspection.isSkipped) {
+        return [];
+      }
+
+      return areaInspection.items
+        .filter((item) => item.resultStatus === "fail")
+        .map((item) => ({
+          status: "open",
+          title: `${areaInspection.areaNameSnapshot} — ${item.itemNameSnapshot}`,
+          inspectionId: draft.id,
+          areaInspectionId: areaInspection.id,
+          inspectionItemId: item.id,
+          clientId: draft.clientId,
+          buildingId: draft.buildingId,
+          areaId: areaInspection.areaId,
+          createdByAuthUserId: submitter.authUserId,
+          createdByEmail: submitter.email,
+        }));
+    });
+
+    if (ticketInputs.length > 0) {
+      await tx.insert(tickets).values(ticketInputs);
+    }
+
+    return { id: input.inspectionId, status: "submitted", ticketCount: ticketInputs.length };
+  });
+}
+
+export async function discardDraftInspection(
+  input: DiscardDraftInspectionInput,
+): Promise<{ discardedInspectionId: string }> {
+  if (!isSetupRecordId(input.inspectionId)) {
+    throw new DraftInspectionNotFoundError();
+  }
+
+  const { db } = await import("@/db/client");
+
+  return db.transaction(async (tx) => {
+    const [inspection] = await tx
+      .select({ id: inspections.id })
+      .from(inspections)
+      .where(and(eq(inspections.id, input.inspectionId), eq(inspections.status, "draft")))
+      .for("update")
+      .limit(1);
+
+    if (!inspection) {
+      throw new DraftInspectionNotFoundError();
+    }
+
+    await tx.delete(inspections).where(eq(inspections.id, input.inspectionId));
+
+    return { discardedInspectionId: input.inspectionId };
+  });
 }
 
 export async function listActiveDraftInspections(): Promise<

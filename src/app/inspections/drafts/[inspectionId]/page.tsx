@@ -2,7 +2,15 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { requireProtectedAction } from "@/lib/auth/session";
+import { listAreas, listInspectionTemplates } from "@/lib/client-building-setup/repository";
 import { getDraftInspection } from "@/lib/inspections/drafts/repository";
+
+import {
+  DraftInspectionEditor,
+  type DraftEditorAreaOption,
+  type DraftEditorDraft,
+  type DraftEditorTemplateOption,
+} from "../draft-inspection-editor";
 
 function formatDateTime(date: Date): string {
   return new Intl.DateTimeFormat("en-US", {
@@ -15,6 +23,52 @@ type DraftInspectionDetailPageProps = {
   params: Promise<{ inspectionId: string }>;
 };
 
+function toDraftEditorDraft(
+  draft: NonNullable<Awaited<ReturnType<typeof getDraftInspection>>>,
+): DraftEditorDraft {
+  return {
+    id: draft.id,
+    areaInspections: draft.areaInspections.map((areaInspection) => ({
+      id: areaInspection.id,
+      inspectionId: areaInspection.inspectionId,
+      source: areaInspection.source,
+      position: areaInspection.position,
+      areaNameSnapshot: areaInspection.areaNameSnapshot,
+      areaTypeNameSnapshot: areaInspection.areaTypeNameSnapshot,
+      inspectionTemplateNameSnapshot: areaInspection.inspectionTemplateNameSnapshot,
+      inspectionTemplateDescriptionSnapshot:
+        areaInspection.inspectionTemplateDescriptionSnapshot,
+      isSkipped: areaInspection.isSkipped,
+      skipReason: areaInspection.skipReason,
+      items: areaInspection.items.map((item) => ({
+        id: item.id,
+        position: item.position,
+        sectionNameSnapshot: item.sectionNameSnapshot,
+        itemNameSnapshot: item.itemNameSnapshot,
+        itemDescriptionSnapshot: item.itemDescriptionSnapshot,
+        resultStatus: item.resultStatus,
+        resultNote: item.resultNote,
+      })),
+    })),
+  };
+}
+
+function toAreaOptions(
+  areas: Awaited<ReturnType<typeof listAreas>>,
+): DraftEditorAreaOption[] {
+  return areas.map((area) => ({
+    id: area.id,
+    name: area.name,
+    areaTypeName: area.areaTypeName,
+  }));
+}
+
+function toTemplateOptions(
+  templates: Awaited<ReturnType<typeof listInspectionTemplates>>,
+): DraftEditorTemplateOption[] {
+  return templates.map((template) => ({ id: template.id, name: template.name }));
+}
+
 export default async function DraftInspectionDetailPage({
   params,
 }: DraftInspectionDetailPageProps) {
@@ -26,6 +80,11 @@ export default async function DraftInspectionDetailPage({
   if (!draft) {
     notFound();
   }
+
+  const [activeAreas, activeTemplates] = await Promise.all([
+    listAreas({ visibility: "active", buildingId: draft.buildingId }),
+    listInspectionTemplates({ visibility: "active" }),
+  ]);
 
   return (
     <main className="min-h-screen bg-slate-50 px-6 py-10 text-ink sm:px-10">
@@ -42,78 +101,17 @@ export default async function DraftInspectionDetailPage({
               {draft.buildingNameSnapshot}
             </h1>
             <p className="text-muted-ink">
-              {draft.clientNameSnapshot} · Started {formatDateTime(draft.startedAt)} by {draft.startedByEmail}
+              {draft.clientNameSnapshot} · Started {formatDateTime(draft.startedAt)} by{" "}
+              {draft.startedByEmail}
             </p>
           </div>
         </div>
 
-        <p className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">
-          Draft data is editable work in progress and is not reportable until submitted.
-        </p>
-
-        <section className="space-y-4" aria-labelledby="planned-area-inspections-heading">
-          <h2
-            id="planned-area-inspections-heading"
-            className="text-xl font-semibold text-slate-950"
-          >
-            Planned Area Inspections
-          </h2>
-
-          {draft.areaInspections.length === 0 ? (
-            <p className="rounded-2xl border border-slate-200 p-5 text-sm text-muted-ink">
-              No planned Area Inspections were captured for this Draft.
-            </p>
-          ) : (
-            <ol className="space-y-4">
-              {draft.areaInspections.map((areaInspection) => (
-                <li
-                  className="rounded-2xl border border-slate-200 p-5"
-                  key={areaInspection.id}
-                >
-                  <div className="space-y-1">
-                    <h3 className="font-semibold text-slate-950">
-                      {areaInspection.position}. {areaInspection.areaNameSnapshot}
-                    </h3>
-                    <p className="text-sm text-muted-ink">
-                      {areaInspection.areaTypeNameSnapshot} · {areaInspection.inspectionTemplateNameSnapshot}
-                    </p>
-                    {areaInspection.inspectionTemplateDescriptionSnapshot ? (
-                      <p className="text-sm text-muted-ink">
-                        {areaInspection.inspectionTemplateDescriptionSnapshot}
-                      </p>
-                    ) : null}
-                  </div>
-
-                  {areaInspection.items.length === 0 ? (
-                    <p className="mt-4 rounded-xl bg-slate-50 px-4 py-3 text-sm text-muted-ink">
-                      No inspection items captured for this Area Inspection.
-                    </p>
-                  ) : (
-                    <ol className="mt-4 space-y-3">
-                      {areaInspection.items.map((item) => (
-                        <li className="rounded-xl bg-slate-50 px-4 py-3" key={item.id}>
-                          <div className="text-sm font-semibold text-slate-950">
-                            {item.position}. {item.itemNameSnapshot}
-                          </div>
-                          {item.sectionNameSnapshot ? (
-                            <div className="mt-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                              {item.sectionNameSnapshot}
-                            </div>
-                          ) : null}
-                          {item.itemDescriptionSnapshot ? (
-                            <p className="mt-1 text-sm text-muted-ink">
-                              {item.itemDescriptionSnapshot}
-                            </p>
-                          ) : null}
-                        </li>
-                      ))}
-                    </ol>
-                  )}
-                </li>
-              ))}
-            </ol>
-          )}
-        </section>
+        <DraftInspectionEditor
+          activeAreas={toAreaOptions(activeAreas)}
+          activeTemplates={toTemplateOptions(activeTemplates)}
+          draft={toDraftEditorDraft(draft)}
+        />
       </section>
     </main>
   );

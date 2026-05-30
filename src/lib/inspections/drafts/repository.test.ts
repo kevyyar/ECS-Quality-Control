@@ -11,10 +11,15 @@ const {
   selectOrderBy,
   insertValues,
   insertReturning,
+  updateSet,
+  updateWhere,
+  deleteWhere,
 } = vi.hoisted(() => ({
   db: {
     select: vi.fn(),
     insert: vi.fn(),
+    update: vi.fn(),
+    delete: vi.fn(),
     transaction: vi.fn(),
   },
   selectFrom: vi.fn(),
@@ -26,6 +31,9 @@ const {
   selectOrderBy: vi.fn(),
   insertValues: vi.fn(),
   insertReturning: vi.fn(),
+  updateSet: vi.fn(),
+  updateWhere: vi.fn(),
+  deleteWhere: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
@@ -35,9 +43,18 @@ const {
   ActiveBuildingInspectionPlanRequiredForDraftError,
   ActiveBuildingRequiredForDraftError,
   ActiveDraftInspectionAlreadyExistsError,
+  DraftInspectionMutationNotAllowedError,
+  DraftInspectionNotFoundError,
+  DraftSubmissionValidationError,
+  addOneOffAreaInspection,
+  discardDraftInspection,
   getDraftInspection,
   listActiveDraftInspections,
+  saveDraftInspectionItemResult,
+  skipDraftAreaInspection,
   startDraftInspection,
+  submitDraftInspection,
+  unskipDraftAreaInspection,
 } = await import("./repository");
 
 const createdAt = new Date("2026-05-29T14:00:00Z");
@@ -126,12 +143,18 @@ const savedInspectionRow = {
   startedAt,
   createdAt: startedAt,
   updatedAt: startedAt,
+  submittedByAuthUserId: null,
+  submittedByEmail: null,
+  submittedAt: null,
 };
 
 const submittedInspectionRow = {
   ...savedInspectionRow,
   id: "bcbcbcbc-bcbc-4bcb-8bcb-bcbcbcbcbcbc",
   status: "submitted" as const,
+  submittedByAuthUserId: starter.authUserId,
+  submittedByEmail: starter.email,
+  submittedAt: new Date("2026-05-29T15:30:00Z"),
 };
 
 const savedAreaInspectionRow = {
@@ -146,6 +169,8 @@ const savedAreaInspectionRow = {
   areaTypeNameSnapshot: areaTypeRow.name,
   inspectionTemplateNameSnapshot: inspectionTemplateRow.name,
   inspectionTemplateDescriptionSnapshot: inspectionTemplateRow.description,
+  isSkipped: false,
+  skipReason: null,
   createdAt: startedAt,
   updatedAt: startedAt,
 };
@@ -159,6 +184,8 @@ const savedInspectionItemRow = {
   sectionNameSnapshot: inspectionTemplateSectionRow.name,
   itemNameSnapshot: inspectionTemplateItemRow.name,
   itemDescriptionSnapshot: inspectionTemplateItemRow.description,
+  resultStatus: null,
+  resultNote: null,
   createdAt: startedAt,
   updatedAt: startedAt,
 };
@@ -215,6 +242,9 @@ describe("Draft Inspection repository", () => {
     db.transaction.mockImplementation(async (callback) => callback(db));
     db.insert.mockReturnValue({ values: insertValues });
     insertValues.mockReturnValue({ returning: insertReturning });
+    updateSet.mockReturnValue({ where: updateWhere });
+    db.update.mockReturnValue({ set: updateSet });
+    db.delete.mockReturnValue({ where: deleteWhere });
   });
 
   it("starts a Draft Inspection from a non-empty active Building Inspection Plan", async () => {
@@ -251,6 +281,8 @@ describe("Draft Inspection repository", () => {
           areaTypeNameSnapshot: areaTypeRow.name,
           inspectionTemplateNameSnapshot: inspectionTemplateRow.name,
           inspectionTemplateDescriptionSnapshot: inspectionTemplateRow.description,
+          isSkipped: false,
+          skipReason: null,
           items: [
             {
               id: savedInspectionItemRow.id,
@@ -261,6 +293,8 @@ describe("Draft Inspection repository", () => {
               sectionNameSnapshot: inspectionTemplateSectionRow.name,
               itemNameSnapshot: inspectionTemplateItemRow.name,
               itemDescriptionSnapshot: inspectionTemplateItemRow.description,
+              resultStatus: null,
+              resultNote: null,
             },
           ],
         },
@@ -407,6 +441,327 @@ describe("Draft Inspection repository", () => {
         ],
       }),
     );
+  });
+
+  it("saves an item result on a Draft Inspection", async () => {
+    selectLimit.mockResolvedValueOnce([
+      {
+        inspection: savedInspectionRow,
+        areaInspection: savedAreaInspectionRow,
+        item: savedInspectionItemRow,
+      },
+    ]);
+    selectOrderBy.mockResolvedValueOnce([
+      {
+        inspection: savedInspectionRow,
+        areaInspection: savedAreaInspectionRow,
+        item: {
+          ...savedInspectionItemRow,
+          resultStatus: "fail",
+          resultNote: "Mirror cracked",
+        },
+      },
+    ]);
+
+    await expect(
+      saveDraftInspectionItemResult({
+        inspectionId: savedInspectionRow.id,
+        itemId: savedInspectionItemRow.id,
+        resultStatus: "fail",
+        resultNote: "Mirror cracked",
+      }),
+    ).resolves.toMatchObject({
+      id: savedInspectionRow.id,
+      areaInspections: [
+        {
+          items: [
+            expect.objectContaining({
+              id: savedInspectionItemRow.id,
+              resultStatus: "fail",
+              resultNote: "Mirror cracked",
+            }),
+          ],
+        },
+      ],
+    });
+
+    expect(updateSet).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ resultStatus: "fail", resultNote: "Mirror cracked" }),
+    );
+  });
+
+  it("blocks editing items in a skipped Area Inspection", async () => {
+    selectLimit.mockResolvedValueOnce([
+      {
+        inspection: savedInspectionRow,
+        areaInspection: { ...savedAreaInspectionRow, isSkipped: true, skipReason: "Closed" },
+        item: savedInspectionItemRow,
+      },
+    ]);
+
+    await expect(
+      saveDraftInspectionItemResult({
+        inspectionId: savedInspectionRow.id,
+        itemId: savedInspectionItemRow.id,
+        resultStatus: "pass",
+        resultNote: "",
+      }),
+    ).rejects.toBeInstanceOf(DraftInspectionMutationNotAllowedError);
+    expect(updateSet).not.toHaveBeenCalled();
+  });
+
+  it("marks planned Area Inspections skipped and clears item results", async () => {
+    selectLimit.mockResolvedValueOnce([{ areaInspection: savedAreaInspectionRow }]);
+    selectOrderBy.mockResolvedValueOnce([
+      {
+        inspection: savedInspectionRow,
+        areaInspection: {
+          ...savedAreaInspectionRow,
+          isSkipped: true,
+          skipReason: "Tenant denied access",
+        },
+        item: savedInspectionItemRow,
+      },
+    ]);
+
+    await expect(
+      skipDraftAreaInspection({
+        inspectionId: savedInspectionRow.id,
+        areaInspectionId: savedAreaInspectionRow.id,
+        skipReason: " Tenant denied access ",
+      }),
+    ).resolves.toMatchObject({
+      areaInspections: [
+        expect.objectContaining({ isSkipped: true, skipReason: "Tenant denied access" }),
+      ],
+    });
+
+    expect(updateSet).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ isSkipped: true, skipReason: "Tenant denied access" }),
+    );
+    expect(updateSet).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ resultStatus: null, resultNote: null }),
+    );
+  });
+
+  it("rejects skipping one-off Area Inspections", async () => {
+    selectLimit.mockResolvedValueOnce([
+      { areaInspection: { ...savedAreaInspectionRow, source: "one_off" as const } },
+    ]);
+
+    await expect(
+      skipDraftAreaInspection({
+        inspectionId: savedInspectionRow.id,
+        areaInspectionId: savedAreaInspectionRow.id,
+        skipReason: "Not needed",
+      }),
+    ).rejects.toBeInstanceOf(DraftInspectionMutationNotAllowedError);
+    expect(updateSet).not.toHaveBeenCalled();
+  });
+
+  it("unskips planned Area Inspections", async () => {
+    selectLimit.mockResolvedValueOnce([
+      {
+        areaInspection: {
+          ...savedAreaInspectionRow,
+          isSkipped: true,
+          skipReason: "Tenant denied access",
+        },
+      },
+    ]);
+    selectOrderBy.mockResolvedValueOnce([
+      {
+        inspection: savedInspectionRow,
+        areaInspection: savedAreaInspectionRow,
+        item: savedInspectionItemRow,
+      },
+    ]);
+
+    await expect(
+      unskipDraftAreaInspection({
+        inspectionId: savedInspectionRow.id,
+        areaInspectionId: savedAreaInspectionRow.id,
+      }),
+    ).resolves.toMatchObject({
+      areaInspections: [expect.objectContaining({ isSkipped: false, skipReason: null })],
+    });
+
+    expect(updateSet).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ isSkipped: false, skipReason: null }),
+    );
+  });
+
+  it("adds a one-off Area Inspection without changing the Building Inspection Plan", async () => {
+    const oneOffAreaInspectionRow = {
+      ...savedAreaInspectionRow,
+      id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+      source: "one_off" as const,
+      position: 2,
+    };
+
+    selectLimit.mockResolvedValueOnce([savedInspectionRow]);
+    selectLimit.mockResolvedValueOnce([
+      {
+        area: areaRow,
+        areaType: areaTypeRow,
+        building: { id: buildingRow.id, archivedAt: null },
+        client: { id: clientRow.id, archivedAt: null },
+      },
+    ]);
+    selectLimit.mockResolvedValueOnce([inspectionTemplateRow]);
+    selectOrderBy.mockResolvedValueOnce([templateItemHydrationRow()]);
+    selectOrderBy.mockResolvedValueOnce([{ position: 1 }]);
+    insertReturning.mockResolvedValueOnce([oneOffAreaInspectionRow]);
+    selectOrderBy.mockResolvedValueOnce([
+      {
+        inspection: savedInspectionRow,
+        areaInspection: savedAreaInspectionRow,
+        item: savedInspectionItemRow,
+      },
+      {
+        inspection: savedInspectionRow,
+        areaInspection: oneOffAreaInspectionRow,
+        item: { ...savedInspectionItemRow, areaInspectionId: oneOffAreaInspectionRow.id },
+      },
+    ]);
+
+    await expect(
+      addOneOffAreaInspection({
+        inspectionId: savedInspectionRow.id,
+        areaId: areaRow.id,
+        inspectionTemplateId: inspectionTemplateRow.id,
+      }),
+    ).resolves.toMatchObject({
+      areaInspections: [
+        expect.objectContaining({ source: "planned" }),
+        expect.objectContaining({ source: "one_off", position: 2 }),
+      ],
+    });
+
+    expect(insertValues).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        inspectionId: savedInspectionRow.id,
+        source: "one_off",
+        position: 2,
+      }),
+    );
+    expect(insertValues).not.toHaveBeenCalledWith(
+      expect.objectContaining({ planId: planRow.id }),
+    );
+  });
+
+  it("rejects invalid Draft submission without creating Tickets", async () => {
+    selectLimit.mockResolvedValueOnce([savedInspectionRow]);
+    selectOrderBy.mockResolvedValueOnce([
+      {
+        inspection: savedInspectionRow,
+        areaInspection: savedAreaInspectionRow,
+        item: savedInspectionItemRow,
+      },
+    ]);
+
+    await expect(
+      submitDraftInspection({ inspectionId: savedInspectionRow.id }, starter),
+    ).rejects.toBeInstanceOf(DraftSubmissionValidationError);
+    expect(updateSet).not.toHaveBeenCalled();
+    expect(insertValues).not.toHaveBeenCalled();
+  });
+
+  it("submits valid Draft Inspections without Tickets when there are no failed items", async () => {
+    const skippedAreaInspectionId = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+
+    selectLimit.mockResolvedValueOnce([savedInspectionRow]);
+    selectOrderBy.mockResolvedValueOnce([
+      {
+        inspection: savedInspectionRow,
+        areaInspection: savedAreaInspectionRow,
+        item: { ...savedInspectionItemRow, resultStatus: "not_applicable" },
+      },
+      {
+        inspection: savedInspectionRow,
+        areaInspection: {
+          ...savedAreaInspectionRow,
+          id: skippedAreaInspectionId,
+          isSkipped: true,
+          skipReason: "Tenant denied access",
+        },
+        item: {
+          ...savedInspectionItemRow,
+          id: "ffffffff-ffff-4fff-8fff-ffffffffffff",
+          areaInspectionId: skippedAreaInspectionId,
+          resultStatus: null,
+        },
+      },
+    ]);
+
+    await expect(
+      submitDraftInspection({ inspectionId: savedInspectionRow.id }, starter),
+    ).resolves.toEqual({ id: savedInspectionRow.id, status: "submitted", ticketCount: 0 });
+
+    expect(updateSet).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "submitted" }),
+    );
+    expect(insertValues).not.toHaveBeenCalled();
+  });
+
+  it("submits valid Draft Inspections and creates one open Ticket per failed item", async () => {
+    selectLimit.mockResolvedValueOnce([savedInspectionRow]);
+    selectOrderBy.mockResolvedValueOnce([
+      {
+        inspection: savedInspectionRow,
+        areaInspection: savedAreaInspectionRow,
+        item: {
+          ...savedInspectionItemRow,
+          resultStatus: "fail",
+          resultNote: "Mirror cracked",
+        },
+      },
+    ]);
+
+    await expect(
+      submitDraftInspection({ inspectionId: savedInspectionRow.id }, starter),
+    ).resolves.toEqual({ id: savedInspectionRow.id, status: "submitted", ticketCount: 1 });
+
+    expect(updateSet).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: "submitted",
+        submittedByAuthUserId: starter.authUserId,
+        submittedByEmail: starter.email,
+      }),
+    );
+    expect(insertValues).toHaveBeenCalledWith([
+      expect.objectContaining({
+        status: "open",
+        inspectionId: savedInspectionRow.id,
+        areaInspectionId: savedAreaInspectionRow.id,
+        inspectionItemId: savedInspectionItemRow.id,
+        title: `${savedAreaInspectionRow.areaNameSnapshot} — ${savedInspectionItemRow.itemNameSnapshot}`,
+      }),
+    ]);
+  });
+
+  it("discards Draft Inspections by deleting the draft root row", async () => {
+    selectLimit.mockResolvedValueOnce([{ id: savedInspectionRow.id }]);
+
+    await expect(
+      discardDraftInspection({ inspectionId: savedInspectionRow.id }),
+    ).resolves.toEqual({ discardedInspectionId: savedInspectionRow.id });
+
+    expect(deleteWhere).toHaveBeenCalledTimes(1);
+    expect(insertValues).not.toHaveBeenCalled();
+  });
+
+  it("rejects submitted Draft mutations", async () => {
+    selectLimit.mockResolvedValueOnce([]);
+
+    await expect(
+      discardDraftInspection({ inspectionId: submittedInspectionRow.id }),
+    ).rejects.toBeInstanceOf(DraftInspectionNotFoundError);
   });
 
   it("lists active Draft Inspections with snapshot metadata and counts", async () => {
