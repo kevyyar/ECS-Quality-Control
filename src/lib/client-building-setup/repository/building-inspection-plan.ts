@@ -51,6 +51,7 @@ type BuildingInspectionPlanHydrationRow = {
   entry: BuildingInspectionPlanEntryRow | null;
   area: AreaRow | null;
   areaType: {
+    id: string;
     archivedAt: Date | null;
   } | null;
   inspectionTemplate: InspectionTemplateRow | null;
@@ -66,12 +67,15 @@ type BuildingInspectionPlanSummaryRow = {
   };
   entry: BuildingInspectionPlanEntryRow | null;
   area: {
+    id: string;
     archivedAt: Date | null;
   } | null;
   areaType: {
+    id: string;
     archivedAt: Date | null;
   } | null;
   inspectionTemplate: {
+    id: string;
     archivedAt: Date | null;
   } | null;
 };
@@ -356,6 +360,7 @@ export async function getBuildingInspectionPlan(
       entry: buildingInspectionPlanEntries,
       area: areas,
       areaType: {
+        id: areaTypes.id,
         archivedAt: areaTypes.archivedAt,
       },
       inspectionTemplate: inspectionTemplates,
@@ -400,12 +405,15 @@ export async function listBuildingInspectionPlanSummaries(
       },
       entry: buildingInspectionPlanEntries,
       area: {
+        id: areas.id,
         archivedAt: areas.archivedAt,
       },
       areaType: {
+        id: areaTypes.id,
         archivedAt: areaTypes.archivedAt,
       },
       inspectionTemplate: {
+        id: inspectionTemplates.id,
         archivedAt: inspectionTemplates.archivedAt,
       },
     })

@@ -316,7 +316,7 @@ const hydratedBuildingInspectionPlanRow = {
   client: { id: activeClientRow.id, name: activeClientRow.name, archivedAt: null },
   entry: buildingInspectionPlanEntryRow,
   area: activeAreaRow.area,
-  areaType: { archivedAt: null },
+  areaType: { id: activeAreaTypeRow.id, archivedAt: null },
   inspectionTemplate: activeInspectionTemplateRow,
 };
 
@@ -1136,6 +1136,15 @@ describe("Client and Building setup repository", () => {
         },
       ],
     });
+
+    expect(db.select).toHaveBeenCalledWith(
+      expect.objectContaining({
+        areaType: expect.objectContaining({
+          id: expect.anything(),
+          archivedAt: expect.anything(),
+        }),
+      }),
+    );
   });
 
   it("hydrates a Building Inspection Plan shell with zero entries", async () => {
@@ -1165,9 +1174,9 @@ describe("Client and Building setup repository", () => {
           building: { archivedAt: null },
           client: { archivedAt: null },
           entry: buildingInspectionPlanEntryRow,
-          area: { archivedAt: null },
-          areaType: { archivedAt: null },
-          inspectionTemplate: { archivedAt: null },
+          area: { id: activeAreaRow.area.id, archivedAt: null },
+          areaType: { id: activeAreaTypeRow.id, archivedAt: null },
+          inspectionTemplate: { id: activeInspectionTemplateRow.id, archivedAt: null },
         },
       ]);
 
@@ -1188,6 +1197,24 @@ describe("Client and Building setup repository", () => {
         isBuildingActive: true,
       },
     ]);
+
+    expect(db.select).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        area: expect.objectContaining({
+          id: expect.anything(),
+          archivedAt: expect.anything(),
+        }),
+        areaType: expect.objectContaining({
+          id: expect.anything(),
+          archivedAt: expect.anything(),
+        }),
+        inspectionTemplate: expect.objectContaining({
+          id: expect.anything(),
+          archivedAt: expect.anything(),
+        }),
+      }),
+    );
   });
 
   it("does not treat stale-only Building Inspection Plans as configured", async () => {
@@ -1199,9 +1226,9 @@ describe("Client and Building setup repository", () => {
           building: { archivedAt: null },
           client: { archivedAt: null },
           entry: buildingInspectionPlanEntryRow,
-          area: { archivedAt },
-          areaType: { archivedAt: null },
-          inspectionTemplate: { archivedAt: null },
+          area: { id: activeAreaRow.area.id, archivedAt },
+          areaType: { id: activeAreaTypeRow.id, archivedAt: null },
+          inspectionTemplate: { id: activeInspectionTemplateRow.id, archivedAt: null },
         },
       ]);
 
