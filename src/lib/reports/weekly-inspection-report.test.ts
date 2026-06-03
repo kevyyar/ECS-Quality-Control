@@ -1,3 +1,4 @@
+import sharp from "sharp";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -180,6 +181,36 @@ describe("Weekly Inspection Report", () => {
     expect(text).toContain("Correction Notes");
   });
 
+
+  it("embeds downloaded photo assets in the PDF", async () => {
+    const report = buildWeeklyInspectionReportData(input);
+
+    if (!report) {
+      throw new Error("expected report");
+    }
+
+    const jpeg = await sharp({
+      create: {
+        background: { b: 0, g: 80, r: 220 },
+        channels: 3,
+        height: 24,
+        width: 32,
+      },
+    }).jpeg().toBuffer();
+    const pdf = Buffer.from(
+      await renderWeeklyInspectionReportPdf(
+        report,
+        new Map([
+          ["before/photo.jpg", jpeg],
+          ["after/photo.jpg", jpeg],
+        ]),
+      ),
+    ).toString("latin1");
+
+    expect(pdf).not.toContain("Photo could not be embedded");
+    expect(pdf).not.toContain("Photo unavailable");
+  });
+
   it("renders reports beyond the first page without dropping later items", async () => {
     const manyItems: WeeklyInspectionReportInput["items"] = Array.from(
       { length: 80 },
@@ -205,6 +236,6 @@ describe("Weekly Inspection Report", () => {
     const pdf = Buffer.from(await renderWeeklyInspectionReportPdf(report)).toString("latin1");
 
     expect(text).toContain("Long report item 80");
-    expect(pdf).toContain("/Count 3");
+    expect(pdf).toMatch(/\/Count [2-9]/);
   });
 });

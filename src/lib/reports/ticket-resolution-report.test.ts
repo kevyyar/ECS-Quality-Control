@@ -1,3 +1,4 @@
+import sharp from "sharp";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -13,6 +14,10 @@ const input = {
     displayName: "ECS Cleaning",
     logoUrl: null,
     primaryBrandColor: "#0f766e",
+    contactPhone: "(555) 010-2244",
+    contactEmail: "reports@ecs.example",
+    contactWebsite: "https://ecs.example",
+    contactAddress: "123 Service Ave",
   },
   ticket: {
     id: "ticket-1",
@@ -44,6 +49,17 @@ const input = {
     },
   ],
 } satisfies TicketResolutionReportInput;
+
+async function tinyJpeg(): Promise<Buffer> {
+  return sharp({
+    create: {
+      background: { b: 20, g: 120, r: 20 },
+      channels: 3,
+      height: 24,
+      width: 32,
+    },
+  }).jpeg().toBuffer();
+}
 
 describe("Ticket Resolution Report", () => {
   it("rejects Open Tickets", () => {
@@ -82,8 +98,31 @@ describe("Ticket Resolution Report", () => {
     expect(pdf).toContain("%PDF-1.3");
     expect(text).toContain("Ticket Resolution Report");
     expect(text).toContain("T-000001");
+    expect(text).toContain("Company contact: reports@ecs.example");
     expect(text).toContain("Before Photo: before/photo.jpg");
     expect(text).toContain("After Photo: after/photo.jpg");
     expect(text).not.toContain("Weekly Inspection Report");
+  });
+
+  it("embeds downloaded photo assets in the PDF", async () => {
+    const report = buildTicketResolutionReportData(input);
+
+    if (!report) {
+      throw new Error("expected report");
+    }
+
+    const jpeg = await tinyJpeg();
+    const pdf = Buffer.from(
+      await renderTicketResolutionReportPdf(
+        report,
+        new Map([
+          ["before/photo.jpg", jpeg],
+          ["after/photo.jpg", jpeg],
+        ]),
+      ),
+    ).toString("latin1");
+
+    expect(pdf).not.toContain("Photo could not be embedded");
+    expect(pdf).not.toContain("Photo unavailable");
   });
 });

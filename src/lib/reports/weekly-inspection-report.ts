@@ -1,4 +1,15 @@
-import PDFDocument from "pdfkit";
+import PDFDocument from "pdfkit/js/pdfkit.standalone";
+
+import { pdfImageSource } from "./pdf-image-source";
+import {
+  buildBaseReportTheme,
+  drawCompanyMark,
+  drawReportFooter,
+  drawText,
+  ensureReportSpace,
+  reportContactLines,
+  type ReportTheme,
+} from "./report-layout";
 
 export type ReportPhoto = {
   id: string;
@@ -19,6 +30,10 @@ export type WeeklyInspectionReportInput = {
     displayName: string;
     logoUrl: string | null;
     primaryBrandColor: string;
+    contactPhone?: string | null;
+    contactEmail?: string | null;
+    contactWebsite?: string | null;
+    contactAddress?: string | null;
   };
   inspection: {
     id: string;
@@ -91,6 +106,16 @@ export type WeeklyInspectionReportData = {
   }>;
   inspectionCorrectionNotes: ReportCorrectionNote[];
 };
+
+type PdfTheme = ReportTheme & {
+  danger: string;
+  pass: string;
+};
+
+const PAGE_MARGIN = 44;
+const PAGE_WIDTH = 612;
+const CONTENT_WIDTH = PAGE_WIDTH - PAGE_MARGIN * 2;
+const HEADER_HEIGHT = 150;
 
 function byPosition<T extends { position: number }>(a: T, b: T): number {
   return a.position - b.position;
@@ -184,6 +209,8 @@ function reportLines(report: WeeklyInspectionReportData): string[] {
     "",
   ];
 
+  reportContactLines(report.branding).forEach((line) => lines.push(`Company contact: ${line}`));
+
   report.areas.forEach((area) => {
     const oneOff = area.source === "one_off" ? " (one-off)" : "";
     lines.push(`${area.areaName}${oneOff} — ${area.templateName}`);
@@ -255,107 +282,447 @@ export function renderWeeklyInspectionReportText(
 
 export type WeeklyInspectionReportPhotoAssets = Map<string, Buffer>;
 
-function addPhoto(
+function themeFor(report: WeeklyInspectionReportData): PdfTheme {
+  return {
+    ...buildBaseReportTheme(report.branding.primaryBrandColor),
+    danger: "#b91c1c",
+    pass: "#15803d",
+  };
+}
+
+function reportStats(report: WeeklyInspectionReportData): Array<{ label: string; value: string }> {
+  const items = report.areas.flatMap((area) => area.items);
+  const failed = items.filter((item) => item.resultStatus === "fail").length;
+  const passed = items.filter((item) => item.resultStatus === "pass").length;
+  const openTickets = items.filter((item) => item.ticket?.status === "open").length;
+  const closedTickets = items.filter((item) => item.ticket?.status === "closed").length;
+
+  return [
+    { label: "Areas", value: String(report.areas.length) },
+    { label: "Items", value: String(items.length) },
+    { label: "Passed", value: String(passed) },
+    { label: "Failed", value: String(failed) },
+    { label: "Open tickets", value: String(openTickets) },
+    { label: "Closed", value: String(closedTickets) },
+  ];
+}
+
+function drawHeader(
+  doc: PDFKit.PDFDocument,
+  report: WeeklyInspectionReportData,
+  theme: PdfTheme,
+  logoAsset: Buffer | null,
+): void {
+  doc.rect(0, 0, PAGE_WIDTH, HEADER_HEIGHT).fill(theme.brand);
+  doc.rect(0, HEADER_HEIGHT - 8, PAGE_WIDTH, 8).fill("#0f172a");
+
+  drawCompanyMark({
+    doc,
+    branding: report.branding,
+    logoAsset,
+    pageMargin: PAGE_MARGIN,
+    theme,
+  });
+  drawText(doc, report.branding.displayName, 124, 34, {
+    bold: true,
+    color: theme.brandText,
+    size: 12,
+    width: 275,
+  });
+  drawText(doc, "Weekly Inspection Report", 124, 56, {
+    bold: true,
+    color: theme.brandText,
+    size: 25,
+    width: 315,
+  });
+  drawText(doc, "Submitted inspection summary with current corrective-action status", 124, 88, {
+    color: theme.brandText,
+    size: 9,
+    width: 330,
+  });
+
+  drawText(doc, "SUBMITTED", 470, 40, {
+    align: "center",
+    bold: true,
+    color: "#ffffff",
+    size: 8,
+    width: 86,
+  });
+  doc.roundedRect(470, 34, 86, 22, 11).stroke("#ffffff");
+  drawText(doc, formatDate(report.submittedAt), 382, 76, {
+    align: "right",
+    color: theme.brandText,
+    size: 9,
+    width: 174,
+  });
+}
+
+function drawOverview(doc: PDFKit.PDFDocument, report: WeeklyInspectionReportData, theme: PdfTheme): void {
+  const y = 174;
+  doc.roundedRect(PAGE_MARGIN, y, CONTENT_WIDTH, 146, 12).fill("#ffffff");
+  doc.roundedRect(PAGE_MARGIN, y, CONTENT_WIDTH, 146, 12).stroke(theme.border);
+
+  drawText(doc, `${report.clientName} · ${report.buildingName}`, PAGE_MARGIN + 18, y + 16, {
+    bold: true,
+    color: theme.ink,
+    size: 16,
+    width: 330,
+  });
+  drawText(doc, `Submitted by ${report.submittedByEmail ?? "Unknown"}`, PAGE_MARGIN + 18, y + 42, {
+    color: theme.muted,
+    size: 9,
+    width: 330,
+  });
+
+  const contact = reportContactLines(report.branding);
+  drawText(doc, "Report contact", PAGE_MARGIN + 364, y + 16, {
+    align: "right",
+    bold: true,
+    color: theme.muted,
+    size: 8,
+    width: 144,
+  });
+  drawText(doc, contact.length > 0 ? contact.join("\n") : "No contact details configured", PAGE_MARGIN + 318, y + 30, {
+    align: "right",
+    color: theme.ink,
+    size: 8.5,
+    width: 190,
+  });
+
+  reportStats(report).forEach((stat, index) => {
+    const x = PAGE_MARGIN + 18 + index * 80;
+    doc.roundedRect(x, y + 82, 68, 44, 10).fill(theme.surface);
+    doc.roundedRect(x, y + 82, 68, 44, 10).stroke(theme.border);
+    drawText(doc, stat.value, x, y + 91, {
+      align: "center",
+      bold: true,
+      color: theme.ink,
+      size: 14,
+      width: 68,
+    });
+    drawText(doc, stat.label, x, y + 111, {
+      align: "center",
+      color: theme.muted,
+      size: 6.8,
+      width: 68,
+    });
+  });
+
+  doc.y = y + 170;
+}
+
+function resultColor(status: "pass" | "fail" | "not_applicable" | null, theme: PdfTheme): string {
+  if (status === "pass") {
+    return theme.pass;
+  }
+
+  if (status === "fail") {
+    return theme.danger;
+  }
+
+  return theme.warning;
+}
+
+function drawBadge(
+  doc: PDFKit.PDFDocument,
+  text: string,
+  x: number,
+  y: number,
+  color: string,
+): void {
+  doc.roundedRect(x, y, 76, 20, 10).fill(color);
+  drawText(doc, text.toUpperCase(), x, y + 6, {
+    align: "center",
+    bold: true,
+    color: "#ffffff",
+    size: 7,
+    width: 76,
+  });
+}
+
+function drawPhotoCard(
   doc: PDFKit.PDFDocument,
   label: string,
   photo: ReportPhoto,
   photoAssets: WeeklyInspectionReportPhotoAssets,
+  theme: PdfTheme,
 ): void {
-  doc.text(`${label}: ${photo.storagePath}`);
+  ensureReportSpace(doc, 102);
+  const y = doc.y;
   const asset = photoAssets.get(photo.storagePath);
 
-  if (!asset) {
-    doc.text("Photo unavailable in this environment.", { indent: 12 });
-    return;
+  doc.roundedRect(PAGE_MARGIN + 28, y, 124, 78, 10).fill(theme.surface);
+  doc.roundedRect(PAGE_MARGIN + 28, y, 124, 78, 10).stroke(theme.border);
+
+  if (asset) {
+    try {
+      doc.image(pdfImageSource(asset), PAGE_MARGIN + 36, y + 8, { fit: [108, 50], align: "center", valign: "center" });
+    } catch {
+      drawText(doc, "Photo could not be embedded", PAGE_MARGIN + 36, y + 30, {
+        align: "center",
+        bold: true,
+        color: theme.warning,
+        size: 7,
+        width: 108,
+      });
+    }
+  } else {
+    drawText(doc, "Photo unavailable", PAGE_MARGIN + 36, y + 30, {
+      align: "center",
+      bold: true,
+      color: theme.muted,
+      size: 7,
+      width: 108,
+    });
   }
 
-  try {
-    doc.image(asset, { fit: [180, 120] });
-  } catch {
-    doc.text("Photo could not be embedded.", { indent: 12 });
-  }
+  drawText(doc, label, PAGE_MARGIN + 166, y + 9, {
+    bold: true,
+    color: theme.ink,
+    size: 8.5,
+    width: CONTENT_WIDTH - 194,
+  });
+  drawText(doc, photo.storagePath, PAGE_MARGIN + 166, y + 26, {
+    color: theme.muted,
+    size: 7.5,
+    width: CONTENT_WIDTH - 194,
+  });
+
+  doc.y = y + 90;
 }
 
-function addCorrectionNoteLines(
+function drawCorrectionNotes(
   doc: PDFKit.PDFDocument,
   notes: ReportCorrectionNote[],
+  emptyText: string,
+  theme: PdfTheme,
 ): void {
   if (notes.length === 0) {
-    doc.text("No Correction Notes.");
+    drawText(doc, emptyText, PAGE_MARGIN + 28, doc.y, {
+      color: theme.muted,
+      size: 8.5,
+      width: CONTENT_WIDTH - 56,
+    });
+    doc.moveDown(0.8);
     return;
   }
 
   notes.forEach((note) => {
-    doc.text(`${note.createdByEmail} (${formatDate(note.createdAt)}): ${note.note}`);
+    ensureReportSpace(doc, 58);
+    const y = doc.y;
+    doc.roundedRect(PAGE_MARGIN + 28, y, CONTENT_WIDTH - 56, 48, 10).fill(theme.surface);
+    doc.roundedRect(PAGE_MARGIN + 28, y, CONTENT_WIDTH - 56, 48, 10).stroke(theme.border);
+    drawText(doc, `${note.createdByEmail} · ${formatDate(note.createdAt)}`, PAGE_MARGIN + 42, y + 10, {
+      bold: true,
+      color: theme.muted,
+      size: 7.5,
+      width: CONTENT_WIDTH - 84,
+    });
+    drawText(doc, note.note, PAGE_MARGIN + 42, y + 25, {
+      color: theme.ink,
+      size: 8.5,
+      width: CONTENT_WIDTH - 84,
+    });
+    doc.y = y + 58;
   });
+}
+
+function drawTicket(
+  doc: PDFKit.PDFDocument,
+  item: WeeklyInspectionReportData["areas"][number]["items"][number],
+  photoAssets: WeeklyInspectionReportPhotoAssets,
+  theme: PdfTheme,
+): void {
+  if (!item.ticket) {
+    return;
+  }
+
+  ensureReportSpace(doc, 92);
+  const y = doc.y;
+  doc.roundedRect(PAGE_MARGIN + 20, y, CONTENT_WIDTH - 40, 72, 10).fill(theme.surface);
+  doc.roundedRect(PAGE_MARGIN + 20, y, CONTENT_WIDTH - 40, 72, 10).stroke(theme.border);
+  drawText(doc, `${item.ticket.displayNumber} · ${item.ticket.status.toUpperCase()}`, PAGE_MARGIN + 34, y + 12, {
+    bold: true,
+    color: item.ticket.status === "closed" ? theme.pass : theme.danger,
+    size: 8,
+    width: 130,
+  });
+  drawText(doc, item.ticket.title, PAGE_MARGIN + 34, y + 28, {
+    bold: true,
+    color: theme.ink,
+    size: 9,
+    width: 250,
+  });
+
+  if (item.ticket.status === "closed") {
+    drawText(doc, `Closed by ${item.ticket.closedByEmail ?? "Unknown"}`, PAGE_MARGIN + 310, y + 12, {
+      align: "right",
+      color: theme.muted,
+      size: 7.5,
+      width: 170,
+    });
+    drawText(doc, formatDate(item.ticket.closedAt), PAGE_MARGIN + 310, y + 27, {
+      align: "right",
+      color: theme.muted,
+      size: 7.5,
+      width: 170,
+    });
+  }
+
+  if (item.ticket.resolutionNote) {
+    drawText(doc, `Resolution: ${item.ticket.resolutionNote}`, PAGE_MARGIN + 34, y + 48, {
+      color: theme.ink,
+      size: 8,
+      width: CONTENT_WIDTH - 68,
+    });
+  }
+
+  doc.y = y + 86;
+  item.ticket.afterPhotos.forEach((photo) => drawPhotoCard(doc, "After Photo", photo, photoAssets, theme));
+  drawCorrectionNotes(doc, item.ticket.correctionNotes, "No Ticket Correction Notes.", theme);
+}
+
+function drawItem(
+  doc: PDFKit.PDFDocument,
+  item: WeeklyInspectionReportData["areas"][number]["items"][number],
+  photoAssets: WeeklyInspectionReportPhotoAssets,
+  theme: PdfTheme,
+): void {
+  ensureReportSpace(doc, 74);
+  const y = doc.y;
+
+  doc.roundedRect(PAGE_MARGIN + 12, y, CONTENT_WIDTH - 24, 2, 1).fill(theme.border);
+  drawBadge(doc, resultLabel(item.resultStatus), PAGE_MARGIN + CONTENT_WIDTH - 94, y + 14, resultColor(item.resultStatus, theme));
+
+  drawText(doc, item.name, PAGE_MARGIN + 20, y + 14, {
+    bold: true,
+    color: theme.ink,
+    size: 10,
+    width: CONTENT_WIDTH - 126,
+  });
+
+  let detailY = doc.y + 5;
+  if (item.sectionName) {
+    detailY = drawText(doc, item.sectionName, PAGE_MARGIN + 20, detailY, {
+      color: theme.muted,
+      size: 7.5,
+      width: CONTENT_WIDTH - 126,
+    }) + 2;
+  }
+
+  if (item.description) {
+    detailY = drawText(doc, item.description, PAGE_MARGIN + 20, detailY, {
+      color: theme.muted,
+      size: 8.2,
+      width: CONTENT_WIDTH - 70,
+    }) + 2;
+  }
+
+  if (item.resultNote) {
+    detailY = drawText(doc, `Note: ${item.resultNote}`, PAGE_MARGIN + 20, detailY, {
+      color: theme.ink,
+      size: 8.2,
+      width: CONTENT_WIDTH - 70,
+    }) + 2;
+  }
+
+  doc.y = Math.max(detailY + 4, y + 58);
+  item.beforePhotos.forEach((photo) => drawPhotoCard(doc, "Before Photo", photo, photoAssets, theme));
+  drawTicket(doc, item, photoAssets, theme);
+}
+
+function drawArea(
+  doc: PDFKit.PDFDocument,
+  area: WeeklyInspectionReportData["areas"][number],
+  photoAssets: WeeklyInspectionReportPhotoAssets,
+  theme: PdfTheme,
+): void {
+  ensureReportSpace(doc, 94);
+  const y = doc.y;
+  const oneOff = area.source === "one_off" ? "One-off" : "Planned";
+
+  doc.roundedRect(PAGE_MARGIN, y, CONTENT_WIDTH, 70, 12).fill("#ffffff");
+  doc.roundedRect(PAGE_MARGIN, y, CONTENT_WIDTH, 70, 12).stroke(theme.border);
+  doc.rect(PAGE_MARGIN, y + 16, 4, 38).fill(theme.brand);
+  drawText(doc, area.areaName, PAGE_MARGIN + 18, y + 14, {
+    bold: true,
+    color: theme.ink,
+    size: 14,
+    width: 330,
+  });
+  drawText(doc, `${oneOff} area · ${area.templateName}`, PAGE_MARGIN + 18, y + 39, {
+    color: theme.muted,
+    size: 8.5,
+    width: 330,
+  });
+  drawText(doc, `${area.items.length} item${area.items.length === 1 ? "" : "s"}`, PAGE_MARGIN + 400, y + 26, {
+    align: "right",
+    bold: true,
+    color: theme.muted,
+    size: 8,
+    width: 90,
+  });
+  doc.y = y + 88;
+
+  if (area.isSkipped) {
+    drawText(doc, `Skipped planned Area: ${area.skipReason ?? "No reason recorded"}`, PAGE_MARGIN + 18, doc.y, {
+      color: theme.warning,
+      size: 9,
+      width: CONTENT_WIDTH - 36,
+    });
+    doc.moveDown(1.2);
+    return;
+  }
+
+  area.items.forEach((item) => drawItem(doc, item, photoAssets, theme));
+  doc.moveDown(0.8);
+}
+
+function drawInspectionCorrectionNotes(doc: PDFKit.PDFDocument, report: WeeklyInspectionReportData, theme: PdfTheme): void {
+  ensureReportSpace(doc, 72);
+  doc.rect(PAGE_MARGIN, doc.y + 7, 4, 30).fill(theme.brand);
+  drawText(doc, "Correction Notes", PAGE_MARGIN + 14, doc.y, {
+    bold: true,
+    color: theme.ink,
+    size: 14,
+    width: 320,
+  });
+  drawText(doc, "Inspection-level notes added after submission", PAGE_MARGIN + 14, doc.y + 3, {
+    color: theme.muted,
+    size: 8.5,
+    width: 430,
+  });
+  doc.moveDown(1.2);
+  drawCorrectionNotes(doc, report.inspectionCorrectionNotes, "No inspection-level Correction Notes.", theme);
 }
 
 export async function renderWeeklyInspectionReportPdf(
   report: WeeklyInspectionReportData,
   photoAssets: WeeklyInspectionReportPhotoAssets = new Map(),
+  logoAsset: Buffer | null = null,
 ): Promise<Uint8Array> {
-  const doc = new PDFDocument({ autoFirstPage: true, margin: 50, compress: false });
+  const doc = new PDFDocument({ autoFirstPage: true, bufferPages: true, margin: PAGE_MARGIN, compress: false });
   const chunks: Buffer[] = [];
   const done = new Promise<Buffer>((resolve, reject) => {
     doc.on("data", (chunk: Buffer) => chunks.push(chunk));
     doc.on("end", () => resolve(Buffer.concat(chunks)));
     doc.on("error", reject);
   });
+  const theme = themeFor(report);
 
   doc.info.Title = "Weekly Inspection Report";
-  doc.fillColor(report.branding.primaryBrandColor).fontSize(18).text("Weekly Inspection Report");
-  doc.fillColor("black").fontSize(13).text(report.branding.displayName);
-  if (report.branding.logoUrl) {
-    doc.fontSize(9).text(`Logo: ${report.branding.logoUrl}`);
-  }
-  doc.moveDown();
-  doc.fontSize(10).text(`Client: ${report.clientName}`);
-  doc.text(`Building: ${report.buildingName}`);
-  doc.text(`Submitted: ${formatDate(report.submittedAt)}`);
-  doc.text(`Submitted by: ${report.submittedByEmail ?? "Unknown"}`);
-
-  report.areas.forEach((area) => {
-    doc.moveDown();
-    const oneOff = area.source === "one_off" ? " (one-off)" : "";
-    doc.fillColor(report.branding.primaryBrandColor).fontSize(13).text(`${area.areaName}${oneOff}`);
-    doc.fillColor("black").fontSize(10).text(`Template: ${area.templateName}`);
-
-    if (area.isSkipped) {
-      doc.text(`Skipped planned Area: ${area.skipReason ?? "No reason recorded"}`);
-      return;
-    }
-
-    area.items.forEach((item) => {
-      doc.moveDown(0.5);
-      doc.fontSize(10).text(`${item.name}: ${resultLabel(item.resultStatus)}`);
-      if (item.description) {
-        doc.text(`Description: ${item.description}`, { indent: 12 });
-      }
-      if (item.resultNote) {
-        doc.text(`Note: ${item.resultNote}`, { indent: 12 });
-      }
-      item.beforePhotos.forEach((photo) => addPhoto(doc, "Before Photo", photo, photoAssets));
-
-      if (item.ticket) {
-        doc.text(`Ticket: ${item.ticket.displayNumber} - ${item.ticket.status}`, { indent: 12 });
-        doc.text(`Ticket title: ${item.ticket.title}`, { indent: 12 });
-        if (item.ticket.status === "closed") {
-          doc.text(`Closed by: ${item.ticket.closedByEmail ?? "Unknown"}`, { indent: 12 });
-          doc.text(`Closed at: ${formatDate(item.ticket.closedAt)}`, { indent: 12 });
-        }
-        if (item.ticket.resolutionNote) {
-          doc.text(`Resolution: ${item.ticket.resolutionNote}`, { indent: 12 });
-        }
-        item.ticket.afterPhotos.forEach((photo) => addPhoto(doc, "After Photo", photo, photoAssets));
-        addCorrectionNoteLines(doc, item.ticket.correctionNotes);
-      }
-    });
+  doc.info.Subject = `${report.clientName} - ${report.buildingName}`;
+  drawHeader(doc, report, theme, logoAsset);
+  drawOverview(doc, report, theme);
+  report.areas.forEach((area) => drawArea(doc, area, photoAssets, theme));
+  drawInspectionCorrectionNotes(doc, report, theme);
+  drawReportFooter({
+    doc,
+    pageMargin: PAGE_MARGIN,
+    contentWidth: CONTENT_WIDTH,
+    label: "ECS QC · Weekly Inspection Report",
+    theme,
   });
-
-  doc.moveDown();
-  doc.fillColor(report.branding.primaryBrandColor).fontSize(13).text("Correction Notes");
-  doc.fillColor("black").fontSize(10);
-  addCorrectionNoteLines(doc, report.inspectionCorrectionNotes);
   doc.end();
 
   return done;
