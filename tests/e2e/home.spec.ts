@@ -6,5 +6,7 @@ test("home page identifies the scaffold", async ({ page }) => {
   await expect(
     page.getByRole("heading", { name: "Janitorial Quality Control" }),
   ).toBeVisible();
-  await expect(page.getByText("Foundation only")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Routes" })).toBeVisible();
+  await expect(page.getByRole("link", { name: /Draft Inspections/ })).toBeVisible();
+  await expect(page.getByRole("link", { name: /Open Tickets/ })).toBeVisible();
 });
