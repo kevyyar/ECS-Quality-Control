@@ -4,12 +4,32 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 const BUCKET = "inspection-evidence";
 
+async function ensureEvidenceBucket(
+  supabase: ReturnType<typeof createSupabaseAdminClient>,
+): Promise<void> {
+  const { data } = await supabase.storage.getBucket(BUCKET);
+
+  if (data) {
+    return;
+  }
+
+  const { error } = await supabase.storage.createBucket(BUCKET, {
+    public: false,
+  });
+
+  if (error && !/already exists/i.test(error.message)) {
+    throw error;
+  }
+}
+
 async function uploadEvidencePhoto(input: {
   path: string;
   photo: { buffer: Buffer; contentType: string };
   failureMessage: string;
 }): Promise<string> {
   const supabase = createSupabaseAdminClient();
+  await ensureEvidenceBucket(supabase);
+
   const { error } = await supabase.storage.from(BUCKET).upload(input.path, input.photo.buffer, {
     contentType: input.photo.contentType,
     upsert: false,

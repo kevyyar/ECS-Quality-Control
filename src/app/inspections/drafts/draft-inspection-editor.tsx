@@ -411,16 +411,27 @@ function ItemResultForm({
   inspectionId: string;
   item: DraftEditorItem;
 }) {
+  const [resultStatus, setResultStatus] = useState(item.resultStatus ?? "");
+  const [resultNote, setResultNote] = useState(item.resultNote ?? "");
   const [state, formAction, isPending] = useActionState(
     saveDraftInspectionItemResultAction,
     saveItemInitialState,
   );
+  const savedResultStatus =
+    state.status === "success" ? state.values.resultStatus : item.resultStatus ?? "";
+  const beforePhotoItem = {
+    ...item,
+    resultStatus: savedResultStatus === ""
+      ? null
+      : (savedResultStatus as DraftEditorItem["resultStatus"]),
+  };
 
   return (
     <>
     <form
       action={formAction}
       className="mt-4 space-y-3 rounded-xl border border-slate-200 bg-white p-4"
+      onReset={(event) => event.preventDefault()}
     >
       <input name="inspectionId" type="hidden" value={inspectionId} />
       <input name="itemId" type="hidden" value={item.id} />
@@ -430,8 +441,9 @@ function ItemResultForm({
           <span>Result</span>
           <select
             className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-950 focus:border-brand-700 focus:outline-none focus:ring-2 focus:ring-brand-100"
-            defaultValue={item.resultStatus ?? ""}
             name="resultStatus"
+            onChange={(event) => setResultStatus(event.currentTarget.value)}
+            value={resultStatus}
           >
             <option value="">Unanswered</option>
             <option value="pass">Pass</option>
@@ -442,14 +454,15 @@ function ItemResultForm({
 
         <label className="space-y-1 text-sm font-medium text-slate-900">
           <span>
-            Note {item.resultStatus === "fail" ? "(required before submit)" : "(optional)"}
+            Note {resultStatus === "fail" ? "(required before submit)" : "(optional)"}
           </span>
           <textarea
             className="min-h-20 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-950 focus:border-brand-700 focus:outline-none focus:ring-2 focus:ring-brand-100"
-            defaultValue={item.resultNote ?? ""}
             maxLength={1000}
             name="resultNote"
+            onChange={(event) => setResultNote(event.currentTarget.value)}
             placeholder="Add notes for this result. Failed items need an issue note before submit."
+            value={resultNote}
           />
         </label>
       </div>
@@ -472,7 +485,7 @@ function ItemResultForm({
         {isPending ? "Saving…" : "Save item result"}
       </button>
     </form>
-    <BeforePhotoControls inspectionId={inspectionId} item={item} />
+    <BeforePhotoControls inspectionId={inspectionId} item={beforePhotoItem} />
     </>
   );
 }

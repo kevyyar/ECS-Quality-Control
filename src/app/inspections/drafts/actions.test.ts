@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   revalidatePath,
+  redirect,
   requireProtectedAction,
   startDraftInspection,
   saveDraftInspectionItemResult,
@@ -25,6 +26,9 @@ const {
   isDraftSubmissionValidationError,
 } = vi.hoisted(() => ({
   revalidatePath: vi.fn(),
+  redirect: vi.fn((url: string) => {
+    throw new Error(`NEXT_REDIRECT:${url}`);
+  }),
   requireProtectedAction: vi.fn(),
   startDraftInspection: vi.fn(),
   saveDraftInspectionItemResult: vi.fn(),
@@ -62,6 +66,7 @@ const {
 }));
 
 vi.mock("next/cache", () => ({ revalidatePath }));
+vi.mock("next/navigation", () => ({ redirect }));
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/auth/session", () => ({ requireProtectedAction }));
 vi.mock("@/lib/inspections/evidence/photo-processing", () => ({
@@ -209,8 +214,8 @@ describe("Draft Inspection actions", () => {
     vi.clearAllMocks();
     requireProtectedAction.mockResolvedValue(supervisor);
     startDraftInspection.mockResolvedValue({ id: draftInspectionId, buildingId });
-    saveDraftInspectionItemResult.mockResolvedValue({ id: draftInspectionId });
-    skipDraftAreaInspection.mockResolvedValue({ id: draftInspectionId });
+    saveDraftInspectionItemResult.mockResolvedValue({ id: draftInspectionId, removedStoragePaths: [] });
+    skipDraftAreaInspection.mockResolvedValue({ id: draftInspectionId, removedStoragePaths: [] });
     unskipDraftAreaInspection.mockResolvedValue({ id: draftInspectionId });
     addOneOffAreaInspection.mockResolvedValue({ id: draftInspectionId });
     processInspectionPhoto.mockResolvedValue(processedPhoto);
@@ -227,7 +232,10 @@ describe("Draft Inspection actions", () => {
       ticketCount: 1,
       alreadySubmitted: false,
     });
-    discardDraftInspection.mockResolvedValue({ discardedInspectionId: draftInspectionId });
+    discardDraftInspection.mockResolvedValue({
+      discardedInspectionId: draftInspectionId,
+      removedStoragePaths: [],
+    });
   });
 
   it("requires Supervisor draft-edit capability before starting a Draft Inspection", async () => {
@@ -337,6 +345,12 @@ describe("Draft Inspection actions", () => {
       status: "success",
       message: "Item result saved.",
       draftInspectionId,
+      values: {
+        inspectionId: draftInspectionId,
+        itemId,
+        resultStatus: "fail",
+        resultNote: "Repair dispenser",
+      },
     });
 
     expect(requireProtectedAction).toHaveBeenCalledWith("editDraftInspection");
@@ -346,6 +360,20 @@ describe("Draft Inspection actions", () => {
       resultStatus: "fail",
       resultNote: "Repair dispenser",
     });
+    expect(revalidatePath).toHaveBeenCalledWith(`/inspections/drafts/${draftInspectionId}`);
+  });
+
+  it("removes orphaned Before Photo objects after item result cleanup", async () => {
+    saveDraftInspectionItemResult.mockResolvedValueOnce({
+      id: draftInspectionId,
+      removedStoragePaths: [storagePath],
+    });
+
+    await expect(
+      saveDraftInspectionItemResultAction({ status: "idle" }, validItemResultFormData()),
+    ).resolves.toMatchObject({ status: "success", draftInspectionId });
+
+    expect(removeInspectionEvidencePhoto).toHaveBeenCalledWith(storagePath);
     expect(revalidatePath).toHaveBeenCalledWith(`/inspections/drafts/${draftInspectionId}`);
   });
 
@@ -526,6 +554,19 @@ describe("Draft Inspection actions", () => {
     expect(requireProtectedAction).toHaveBeenCalledWith("editDraftInspection");
   });
 
+  it("removes orphaned Before Photo objects after skipping an area", async () => {
+    skipDraftAreaInspection.mockResolvedValueOnce({
+      id: draftInspectionId,
+      removedStoragePaths: [storagePath],
+    });
+
+    await expect(
+      skipDraftAreaInspectionAction({ status: "idle" }, validSkipFormData()),
+    ).resolves.toMatchObject({ status: "success", draftInspectionId });
+
+    expect(removeInspectionEvidencePhoto).toHaveBeenCalledWith(storagePath);
+  });
+
   it("adds one-off Area Inspections and maps inactive setup errors", async () => {
     addOneOffAreaInspection.mockRejectedValueOnce(
       oneOffSetupError({ areaId: "Select an active Area for this Building." }),
@@ -552,16 +593,10 @@ describe("Draft Inspection actions", () => {
     });
   });
 
-  it("submits valid Draft Inspections through submit capability", async () => {
+  it("submits valid Draft Inspections and redirects to the submitted Inspection", async () => {
     await expect(
       submitDraftInspectionAction({ status: "idle" }, validDraftIdentityFormData()),
-    ).resolves.toEqual({
-      status: "success",
-      message: "Draft Inspection submitted. 1 Ticket created.",
-      submittedInspectionId: draftInspectionId,
-      ticketCount: 1,
-      alreadySubmitted: false,
-    });
+    ).rejects.toThrow(`NEXT_REDIRECT:/inspections/${draftInspectionId}`);
 
     expect(requireProtectedAction).toHaveBeenCalledWith("submitDraftInspection");
     expect(submitDraftInspection).toHaveBeenCalledWith(
@@ -571,6 +606,7 @@ describe("Draft Inspection actions", () => {
     expect(revalidatePath).toHaveBeenCalledWith("/inspections");
     expect(revalidatePath).toHaveBeenCalledWith("/tickets");
     expect(revalidatePath).toHaveBeenCalledWith(`/inspections/drafts/${draftInspectionId}`);
+    expect(redirect).toHaveBeenCalledWith(`/inspections/${draftInspectionId}`);
   });
 
   it("maps already-submitted retries to a success message", async () => {
@@ -583,17 +619,12 @@ describe("Draft Inspection actions", () => {
 
     await expect(
       submitDraftInspectionAction({ status: "idle" }, validDraftIdentityFormData()),
-    ).resolves.toEqual({
-      status: "success",
-      message: "Draft Inspection was already submitted. No additional Tickets created. 2 existing Tickets.",
-      submittedInspectionId: draftInspectionId,
-      ticketCount: 2,
-      alreadySubmitted: true,
-    });
+    ).rejects.toThrow(`NEXT_REDIRECT:/inspections/${draftInspectionId}`);
 
     expect(revalidatePath).toHaveBeenCalledWith("/inspections");
     expect(revalidatePath).toHaveBeenCalledWith("/tickets");
     expect(revalidatePath).toHaveBeenCalledWith(`/inspections/drafts/${draftInspectionId}`);
+    expect(redirect).toHaveBeenCalledWith(`/inspections/${draftInspectionId}`);
   });
 
   it("returns submission validation errors without revalidating unchanged Drafts", async () => {
@@ -642,18 +673,29 @@ describe("Draft Inspection actions", () => {
     expect(revalidatePath).not.toHaveBeenCalled();
   });
 
-  it("discards Draft Inspections through draft-edit capability", async () => {
+  it("discards Draft Inspections and redirects to active drafts", async () => {
     await expect(
       discardDraftInspectionAction({ status: "idle" }, validDraftIdentityFormData()),
-    ).resolves.toEqual({
-      status: "success",
-      message: "Draft Inspection discarded.",
-      discardedInspectionId: draftInspectionId,
-    });
+    ).rejects.toThrow("NEXT_REDIRECT:/inspections/drafts");
 
     expect(requireProtectedAction).toHaveBeenCalledWith("editDraftInspection");
     expect(discardDraftInspection).toHaveBeenCalledWith({ inspectionId: draftInspectionId });
+    expect(revalidatePath).toHaveBeenCalledWith("/inspections");
     expect(revalidatePath).toHaveBeenCalledWith(`/inspections/drafts/${draftInspectionId}`);
+    expect(redirect).toHaveBeenCalledWith("/inspections/drafts");
+  });
+
+  it("removes orphaned Before Photo objects after discarding a draft", async () => {
+    discardDraftInspection.mockResolvedValueOnce({
+      discardedInspectionId: draftInspectionId,
+      removedStoragePaths: [storagePath],
+    });
+
+    await expect(
+      discardDraftInspectionAction({ status: "idle" }, validDraftIdentityFormData()),
+    ).rejects.toThrow("NEXT_REDIRECT:/inspections/drafts");
+
+    expect(removeInspectionEvidencePhoto).toHaveBeenCalledWith(storagePath);
   });
 
   it("maps missing Draft mutations to form errors", async () => {

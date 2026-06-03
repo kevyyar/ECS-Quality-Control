@@ -504,7 +504,45 @@ describe("Draft Inspection repository", () => {
       1,
       expect.objectContaining({ resultStatus: "fail", resultNote: "Mirror cracked" }),
     );
+    expect(db.select.mock.calls[0]?.[0]).not.toHaveProperty("evidence");
   });
+
+  it.each(["pass", "not_applicable"] as const)(
+    "returns deleted Before Photo paths when a failed item changes to %s",
+    async (resultStatus) => {
+      selectLimit.mockResolvedValueOnce([
+        {
+          inspection: savedInspectionRow,
+          areaInspection: savedAreaInspectionRow,
+          item: { ...savedInspectionItemRow, resultStatus: "fail" },
+        },
+      ]);
+      selectOrderBy
+        .mockResolvedValueOnce([{ storagePath: beforePhotoEvidenceRow.storagePath }])
+        .mockResolvedValueOnce([
+          {
+            inspection: savedInspectionRow,
+            areaInspection: savedAreaInspectionRow,
+            item: { ...savedInspectionItemRow, resultStatus, resultNote: null },
+            evidence: null,
+          },
+        ]);
+
+      await expect(
+        saveDraftInspectionItemResult({
+          inspectionId: savedInspectionRow.id,
+          itemId: savedInspectionItemRow.id,
+          resultStatus,
+          resultNote: "",
+        }),
+      ).resolves.toMatchObject({
+        id: savedInspectionRow.id,
+        removedStoragePaths: [beforePhotoEvidenceRow.storagePath],
+      });
+
+      expect(deleteWhere).toHaveBeenCalledTimes(1);
+    },
+  );
 
   it("blocks editing items in a skipped Area Inspection", async () => {
     selectLimit.mockResolvedValueOnce([
@@ -616,19 +654,21 @@ describe("Draft Inspection repository", () => {
     expect(updateSet).toHaveBeenCalledWith(expect.objectContaining({ updatedAt: expect.anything() }));
   });
 
-  it("marks planned Area Inspections skipped and clears item results", async () => {
+  it("marks planned Area Inspections skipped, clears item results, and returns deleted Before Photo paths", async () => {
     selectLimit.mockResolvedValueOnce([{ areaInspection: savedAreaInspectionRow }]);
-    selectOrderBy.mockResolvedValueOnce([
-      {
-        inspection: savedInspectionRow,
-        areaInspection: {
-          ...savedAreaInspectionRow,
-          isSkipped: true,
-          skipReason: "Tenant denied access",
+    selectOrderBy
+      .mockResolvedValueOnce([{ storagePath: beforePhotoEvidenceRow.storagePath }])
+      .mockResolvedValueOnce([
+        {
+          inspection: savedInspectionRow,
+          areaInspection: {
+            ...savedAreaInspectionRow,
+            isSkipped: true,
+            skipReason: "Tenant denied access",
+          },
+          item: savedInspectionItemRow,
         },
-        item: savedInspectionItemRow,
-      },
-    ]);
+      ]);
 
     await expect(
       skipDraftAreaInspection({
@@ -637,6 +677,7 @@ describe("Draft Inspection repository", () => {
         skipReason: " Tenant denied access ",
       }),
     ).resolves.toMatchObject({
+      removedStoragePaths: [beforePhotoEvidenceRow.storagePath],
       areaInspections: [
         expect.objectContaining({ isSkipped: true, skipReason: "Tenant denied access" }),
       ],
@@ -937,12 +978,16 @@ describe("Draft Inspection repository", () => {
     expect(insertValues).not.toHaveBeenCalled();
   });
 
-  it("discards Draft Inspections by deleting the draft root row", async () => {
+  it("discards Draft Inspections by deleting the draft root row and returning deleted Before Photo paths", async () => {
     selectLimit.mockResolvedValueOnce([{ id: savedInspectionRow.id }]);
+    selectOrderBy.mockResolvedValueOnce([{ storagePath: beforePhotoEvidenceRow.storagePath }]);
 
     await expect(
       discardDraftInspection({ inspectionId: savedInspectionRow.id }),
-    ).resolves.toEqual({ discardedInspectionId: savedInspectionRow.id });
+    ).resolves.toEqual({
+      discardedInspectionId: savedInspectionRow.id,
+      removedStoragePaths: [beforePhotoEvidenceRow.storagePath],
+    });
 
     expect(deleteWhere).toHaveBeenCalledTimes(1);
     expect(insertValues).not.toHaveBeenCalled();

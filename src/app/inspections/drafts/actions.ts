@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 
 import { requireProtectedAction } from "@/lib/auth/session";
 import { processInspectionPhoto } from "@/lib/inspections/evidence/photo-processing";
@@ -73,7 +74,7 @@ export type StartDraftInspectionActionState =
 
 export type SaveDraftInspectionItemResultActionState =
   | { status: "idle" }
-  | DraftMutationSuccessState
+  | (DraftMutationSuccessState & { values: SaveDraftInspectionItemResultFormValues })
   | ActionErrorState<
       SaveDraftInspectionItemResultFormValues,
       SaveDraftInspectionItemResultFieldErrors
@@ -136,30 +137,6 @@ function draftMutationErrorMessage(error: unknown): string | undefined {
   return undefined;
 }
 
-function submittedRetryMessage(ticketCount: number): string {
-  if (ticketCount === 0) {
-    return "Draft Inspection was already submitted. No additional Tickets created.";
-  }
-
-  if (ticketCount === 1) {
-    return "Draft Inspection was already submitted. No additional Tickets created. 1 existing Ticket.";
-  }
-
-  return `Draft Inspection was already submitted. No additional Tickets created. ${ticketCount} existing Tickets.`;
-}
-
-function ticketMessage(ticketCount: number): string {
-  if (ticketCount === 0) {
-    return "Draft Inspection submitted. No Tickets created.";
-  }
-
-  if (ticketCount === 1) {
-    return "Draft Inspection submitted. 1 Ticket created.";
-  }
-
-  return `Draft Inspection submitted. ${ticketCount} Tickets created.`;
-}
-
 function saveItemValues(
   data: Parameters<typeof saveDraftInspectionItemResult>[0],
 ): SaveDraftInspectionItemResultFormValues {
@@ -174,6 +151,14 @@ function saveItemValues(
 function formString(formData: FormData, field: string): string {
   const value = formData.get(field);
   return typeof value === "string" ? value.trim() : "";
+}
+
+async function removeInspectionEvidencePhotos(storagePaths: string[]): Promise<void> {
+  await Promise.all(
+    storagePaths.map((storagePath) =>
+      removeInspectionEvidencePhoto(storagePath).catch(() => undefined),
+    ),
+  );
 }
 
 export async function startDraftInspectionAction(
@@ -253,12 +238,14 @@ export async function saveDraftInspectionItemResultAction(
 
   try {
     const draft = await saveDraftInspectionItemResult(result.data);
+    await removeInspectionEvidencePhotos(draft.removedStoragePaths ?? []);
     revalidateDraftInspectionViews(draft.id);
 
     return {
       status: "success",
       message: "Item result saved.",
       draftInspectionId: draft.id,
+      values: saveItemValues(result.data),
     };
   } catch (error) {
     const formError = draftMutationErrorMessage(error);
@@ -289,6 +276,7 @@ export async function skipDraftAreaInspectionAction(
 
   try {
     const draft = await skipDraftAreaInspection(result.data);
+    await removeInspectionEvidencePhotos(draft.removedStoragePaths ?? []);
     revalidateDraftInspectionViews(draft.id);
 
     return {
@@ -384,20 +372,13 @@ export async function submitDraftInspectionAction(
     return { status: "error", errors: result.errors, values: result.values };
   }
 
+  let submittedInspectionId: string;
+
   try {
     const submitted = await submitDraftInspection(result.data, user);
+    submittedInspectionId = submitted.id;
     revalidateDraftInspectionViews(submitted.id);
     revalidatePath("/tickets");
-
-    return {
-      status: "success",
-      message: submitted.alreadySubmitted
-        ? submittedRetryMessage(submitted.ticketCount)
-        : ticketMessage(submitted.ticketCount),
-      submittedInspectionId: submitted.id,
-      ticketCount: submitted.ticketCount,
-      alreadySubmitted: submitted.alreadySubmitted,
-    };
   } catch (error) {
     logOperationalError("draft.submit.failed", error, {
       workflow: "draft.submit",
@@ -431,6 +412,8 @@ export async function submitDraftInspectionAction(
 
     throw error;
   }
+
+  redirect(`/inspections/${submittedInspectionId}`);
 }
 
 export async function discardDraftInspectionAction(
@@ -446,13 +429,8 @@ export async function discardDraftInspectionAction(
 
   try {
     const discarded = await discardDraftInspection(result.data);
+    await removeInspectionEvidencePhotos(discarded.removedStoragePaths ?? []);
     revalidateDraftInspectionViews(discarded.discardedInspectionId);
-
-    return {
-      status: "success",
-      message: "Draft Inspection discarded.",
-      discardedInspectionId: discarded.discardedInspectionId,
-    };
   } catch (error) {
     const formError = draftMutationErrorMessage(error);
 
@@ -462,6 +440,8 @@ export async function discardDraftInspectionAction(
 
     throw error;
   }
+
+  redirect("/inspections/drafts");
 }
 
 export async function addDraftInspectionItemBeforePhotoAction(

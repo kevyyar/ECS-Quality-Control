@@ -82,6 +82,10 @@ type DraftHydrationRow = {
   evidence: InspectionItemEvidenceRow | null;
 };
 
+type DraftInspectionRecordWithRemovedEvidence = DraftInspectionRecord & {
+  removedStoragePaths: string[];
+};
+
 export class ActiveDraftInspectionAlreadyExistsError extends Error {
   readonly draftInspectionId: string;
 
@@ -628,7 +632,7 @@ export async function getDraftInspection(
 
 export async function saveDraftInspectionItemResult(
   input: SaveDraftInspectionItemResultInput,
-): Promise<DraftInspectionRecord> {
+): Promise<DraftInspectionRecordWithRemovedEvidence> {
   if (!isSetupRecordId(input.inspectionId) || !isSetupRecordId(input.itemId)) {
     throw new DraftInspectionNotFoundError();
   }
@@ -636,6 +640,7 @@ export async function saveDraftInspectionItemResult(
   assertValidItemResultInput(input);
 
   const { db } = await import("@/db/client");
+  let removedStoragePaths: string[] = [];
 
   await db.transaction(async (tx) => {
     const [target] = await tx
@@ -643,7 +648,6 @@ export async function saveDraftInspectionItemResult(
         inspection: inspections,
         areaInspection: inspectionAreaInspections,
         item: inspectionItems,
-        evidence: inspectionItemEvidence,
       })
       .from(inspectionItems)
       .innerJoin(
@@ -680,6 +684,13 @@ export async function saveDraftInspectionItemResult(
       })
       .where(eq(inspectionItems.id, input.itemId));
     if (input.resultStatus !== "fail") {
+      const evidenceRows = await tx
+        .select({ storagePath: inspectionItemEvidence.storagePath })
+        .from(inspectionItemEvidence)
+        .where(eq(inspectionItemEvidence.inspectionItemId, input.itemId))
+        .orderBy(asc(inspectionItemEvidence.id));
+      removedStoragePaths = evidenceRows.map((row) => row.storagePath);
+
       await tx
         .delete(inspectionItemEvidence)
         .where(eq(inspectionItemEvidence.inspectionItemId, input.itemId));
@@ -690,7 +701,9 @@ export async function saveDraftInspectionItemResult(
       .where(eq(inspections.id, input.inspectionId));
   });
 
-  return requireFreshDraftInspection(input.inspectionId);
+  return Object.assign(await requireFreshDraftInspection(input.inspectionId), {
+    removedStoragePaths,
+  });
 }
 
 export async function addDraftInspectionItemBeforePhoto(
@@ -813,7 +826,7 @@ export async function removeDraftInspectionItemBeforePhoto(
 
 export async function skipDraftAreaInspection(
   input: SkipDraftAreaInspectionInput,
-): Promise<DraftInspectionRecord> {
+): Promise<DraftInspectionRecordWithRemovedEvidence> {
   if (!isSetupRecordId(input.inspectionId) || !isSetupRecordId(input.areaInspectionId)) {
     throw new DraftInspectionNotFoundError();
   }
@@ -821,6 +834,7 @@ export async function skipDraftAreaInspection(
   assertValidSkipReason(input.skipReason);
 
   const { db } = await import("@/db/client");
+  let removedStoragePaths: string[] = [];
 
   await db.transaction(async (tx) => {
     const [target] = await tx
@@ -847,6 +861,14 @@ export async function skipDraftAreaInspection(
       );
     }
 
+    const evidenceRows = await tx
+      .select({ storagePath: inspectionItemEvidence.storagePath })
+      .from(inspectionItemEvidence)
+      .innerJoin(inspectionItems, eq(inspectionItemEvidence.inspectionItemId, inspectionItems.id))
+      .where(eq(inspectionItems.areaInspectionId, input.areaInspectionId))
+      .orderBy(asc(inspectionItemEvidence.id));
+    removedStoragePaths = evidenceRows.map((row) => row.storagePath);
+
     await tx
       .update(inspectionAreaInspections)
       .set({
@@ -872,7 +894,9 @@ export async function skipDraftAreaInspection(
       .where(eq(inspections.id, input.inspectionId));
   });
 
-  return requireFreshDraftInspection(input.inspectionId);
+  return Object.assign(await requireFreshDraftInspection(input.inspectionId), {
+    removedStoragePaths,
+  });
 }
 
 export async function unskipDraftAreaInspection(
@@ -1200,7 +1224,7 @@ export async function submitDraftInspection(
 
 export async function discardDraftInspection(
   input: DiscardDraftInspectionInput,
-): Promise<{ discardedInspectionId: string }> {
+): Promise<{ discardedInspectionId: string; removedStoragePaths: string[] }> {
   if (!isSetupRecordId(input.inspectionId)) {
     throw new DraftInspectionNotFoundError();
   }
@@ -1219,9 +1243,21 @@ export async function discardDraftInspection(
       throw new DraftInspectionNotFoundError();
     }
 
+    const evidenceRows = await tx
+      .select({ storagePath: inspectionItemEvidence.storagePath })
+      .from(inspectionItemEvidence)
+      .innerJoin(inspectionItems, eq(inspectionItemEvidence.inspectionItemId, inspectionItems.id))
+      .innerJoin(
+        inspectionAreaInspections,
+        eq(inspectionItems.areaInspectionId, inspectionAreaInspections.id),
+      )
+      .where(eq(inspectionAreaInspections.inspectionId, input.inspectionId))
+      .orderBy(asc(inspectionItemEvidence.id));
+    const removedStoragePaths = evidenceRows.map((row) => row.storagePath);
+
     await tx.delete(inspections).where(eq(inspections.id, input.inspectionId));
 
-    return { discardedInspectionId: input.inspectionId };
+    return { discardedInspectionId: input.inspectionId, removedStoragePaths };
   });
 }
 
