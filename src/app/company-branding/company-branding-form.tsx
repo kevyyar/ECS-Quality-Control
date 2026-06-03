@@ -44,6 +44,7 @@ export function CompanyBrandingForm({ branding }: CompanyBrandingFormProps) {
     saveCompanyBranding,
     initialState,
   );
+  const currentLogoUrl = fieldValue(state, branding, "logoUrl");
 
   return (
     <form action={formAction} className="space-y-6">
@@ -62,17 +63,48 @@ export function CompanyBrandingForm({ branding }: CompanyBrandingFormProps) {
           <FieldError message={fieldError(state, "displayName")} />
         </label>
 
-        <label className="space-y-2" htmlFor="logoUrl">
+        <label className="space-y-2" htmlFor="logoFile">
           <span className="text-sm font-semibold text-slate-900">
-            Logo URL or path
+            Company logo
           </span>
           <input
-            className="w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-950 shadow-sm focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100"
-            defaultValue={fieldValue(state, branding, "logoUrl")}
-            id="logoUrl"
             name="logoUrl"
-            placeholder="/logos/company.svg"
+            readOnly
+            type="hidden"
+            value={currentLogoUrl}
           />
+          <input
+            accept="image/png,image/jpeg,image/webp"
+            className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm file:mr-4 file:rounded-lg file:border-0 file:bg-brand-50 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-brand-700 hover:file:bg-brand-100 focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100"
+            id="logoFile"
+            name="logoFile"
+            type="file"
+          />
+          <p className="text-sm text-muted-ink">
+            Upload a PNG, JPG, or WEBP logo up to 2 MB. Saving a new file
+            replaces the logo used in future PDF reports.
+          </p>
+          {currentLogoUrl ? (
+            <div className="space-y-3 rounded-lg bg-slate-50 px-3 py-2">
+              <div className="flex items-center gap-3">
+                <span className="grid size-10 shrink-0 place-items-center rounded-md border border-slate-200 bg-white text-xs font-semibold text-brand-700">
+                  Logo
+                </span>
+                <p className="min-w-0 truncate text-sm text-slate-600">
+                  Current logo: {currentLogoUrl}
+                </p>
+              </div>
+              <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                <input
+                  className="size-4 rounded border-slate-300 text-brand-700 focus:ring-brand-100"
+                  name="removeCurrentLogo"
+                  type="checkbox"
+                  value="true"
+                />
+                Remove current logo on save
+              </label>
+            </div>
+          ) : null}
           <FieldError message={fieldError(state, "logoUrl")} />
         </label>
 
