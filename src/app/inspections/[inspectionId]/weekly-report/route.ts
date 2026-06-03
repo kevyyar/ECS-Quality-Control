@@ -1,8 +1,13 @@
 import { requireInternalUser } from "@/lib/auth/session";
 import { downloadEvidencePhoto } from "@/lib/evidence/storage";
 import { logOperationalError } from "@/lib/observability/logger";
+import { loadReportLogoAsset } from "@/lib/reports/logo-assets";
 import { getWeeklyInspectionReportData } from "@/lib/reports/weekly-inspection-report-data";
-import { renderWeeklyInspectionReportPdf, type WeeklyInspectionReportPhotoAssets, type WeeklyInspectionReportData } from "@/lib/reports/weekly-inspection-report";
+import {
+  renderWeeklyInspectionReportPdf,
+  type WeeklyInspectionReportData,
+  type WeeklyInspectionReportPhotoAssets,
+} from "@/lib/reports/weekly-inspection-report";
 
 async function loadReportPhotoAssets(
   report: WeeklyInspectionReportData,
@@ -45,8 +50,11 @@ export async function GET(
       return new Response("Weekly Inspection Report was not found.", { status: 404 });
     }
 
-    const photoAssets = await loadReportPhotoAssets(report);
-    const pdf = await renderWeeklyInspectionReportPdf(report, photoAssets);
+    const [photoAssets, logoAsset] = await Promise.all([
+      loadReportPhotoAssets(report),
+      loadReportLogoAsset(report.branding.logoUrl),
+    ]);
+    const pdf = await renderWeeklyInspectionReportPdf(report, photoAssets, logoAsset);
     const body = pdf.buffer.slice(
       pdf.byteOffset,
       pdf.byteOffset + pdf.byteLength,

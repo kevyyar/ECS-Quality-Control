@@ -1,6 +1,7 @@
 import { requireInternalUser } from "@/lib/auth/session";
 import { downloadEvidencePhoto } from "@/lib/evidence/storage";
 import { logOperationalError } from "@/lib/observability/logger";
+import { loadReportLogoAsset } from "@/lib/reports/logo-assets";
 import { getTicketResolutionReportData } from "@/lib/reports/ticket-resolution-report-data";
 import {
   renderTicketResolutionReportPdf,
@@ -45,8 +46,11 @@ export async function GET(
       return new Response("Ticket Resolution Report was not found.", { status: 404 });
     }
 
-    const photoAssets = await loadTicketPhotoAssets(report);
-    const pdf = await renderTicketResolutionReportPdf(report, photoAssets);
+    const [photoAssets, logoAsset] = await Promise.all([
+      loadTicketPhotoAssets(report),
+      loadReportLogoAsset(report.branding.logoUrl),
+    ]);
+    const pdf = await renderTicketResolutionReportPdf(report, photoAssets, logoAsset);
     const body = pdf.buffer.slice(
       pdf.byteOffset,
       pdf.byteOffset + pdf.byteLength,

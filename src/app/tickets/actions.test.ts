@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   revalidatePath,
+  redirect,
   requireProtectedAction,
   closeTicket,
   processEvidencePhoto,
@@ -11,6 +12,9 @@ const {
   isTicketNotFoundError,
 } = vi.hoisted(() => ({
   revalidatePath: vi.fn(),
+  redirect: vi.fn((url: string) => {
+    throw new Error(`NEXT_REDIRECT:${url}`);
+  }),
   requireProtectedAction: vi.fn(),
   closeTicket: vi.fn(),
   processEvidencePhoto: vi.fn(),
@@ -23,6 +27,7 @@ const {
 }));
 
 vi.mock("next/cache", () => ({ revalidatePath }));
+vi.mock("next/navigation", () => ({ redirect }));
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/auth/session", () => ({ requireProtectedAction }));
 vi.mock("@/lib/evidence/photo-processing", () => ({ processEvidencePhoto }));
@@ -71,7 +76,9 @@ describe("Ticket actions", () => {
   });
 
   it("requires Supervisor close-Ticket capability", async () => {
-    await closeTicketAction({ status: "idle" }, validFormData());
+    await expect(closeTicketAction({ status: "idle" }, validFormData())).rejects.toThrow(
+      `NEXT_REDIRECT:/tickets/${ticketId}`,
+    );
 
     expect(requireProtectedAction).toHaveBeenCalledWith("closeTicket");
   });
@@ -104,12 +111,10 @@ describe("Ticket actions", () => {
     expect(closeTicket).not.toHaveBeenCalled();
   });
 
-  it("uploads After Photos and closes the Ticket", async () => {
-    await expect(closeTicketAction({ status: "idle" }, validFormData())).resolves.toEqual({
-      status: "success",
-      message: "Ticket closed.",
-      ticketId,
-    });
+  it("uploads After Photos, closes the Ticket, and redirects to Ticket detail", async () => {
+    await expect(closeTicketAction({ status: "idle" }, validFormData())).rejects.toThrow(
+      `NEXT_REDIRECT:/tickets/${ticketId}`,
+    );
 
     expect(uploadTicketAfterPhoto).toHaveBeenCalledWith({
       ticketId,
@@ -127,6 +132,7 @@ describe("Ticket actions", () => {
     expect(revalidatePath).toHaveBeenCalledWith("/dashboard");
     expect(revalidatePath).toHaveBeenCalledWith(`/tickets/${ticketId}`);
     expect(revalidatePath).toHaveBeenCalledWith(`/tickets/${ticketId}/close`);
+    expect(redirect).toHaveBeenCalledWith(`/tickets/${ticketId}`);
   });
 
 

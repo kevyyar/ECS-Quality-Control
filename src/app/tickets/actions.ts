@@ -1,5 +1,7 @@
 "use server";
 
+import { redirect } from "next/navigation";
+
 import { requireProtectedAction } from "@/lib/auth/session";
 import { processEvidencePhoto } from "@/lib/evidence/photo-processing";
 import {
@@ -112,10 +114,5 @@ export async function closeTicketAction(
   }
 
   revalidateTicketViews(parsed.data.ticketId);
-
-  return {
-    status: "success",
-    message: "Ticket closed.",
-    ticketId: parsed.data.ticketId,
-  };
+  redirect(`/tickets/${parsed.data.ticketId}`);
 }
