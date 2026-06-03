@@ -13,4 +13,10 @@ describe("deployment configuration", () => {
     expect(vercel.buildCommand).toBe("pnpm deploy:check && pnpm build");
     expect(vercel.installCommand).toContain("pnpm install --frozen-lockfile");
   });
+
+  it("allows Server Action evidence uploads within the app photo size limit", () => {
+    const nextConfig = readFileSync("next.config.ts", "utf8");
+
+    expect(nextConfig).toContain("bodySizeLimit: \"12mb\"");
+  });
 });
