@@ -1,14 +1,55 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: Arial, Helvetica, sans-serif;
-  --color-brand-50: oklch(0.98 0.02 160);
-  --color-brand-100: oklch(0.94 0.05 160);
-  --color-brand-600: oklch(0.47 0.13 160);
-  --color-brand-700: oklch(0.39 0.12 160);
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-display: var(--font-bricolage), ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", "Courier New", monospace;
+  
+  /* Brand Forest Green - Scale representing the dark primary theme */
+  --color-brand-forest-50: oklch(0.97 0.01 160);
+  --color-brand-forest-100: oklch(0.93 0.02 160);
+  --color-brand-forest-200: oklch(0.86 0.04 160);
+  --color-brand-forest-300: oklch(0.76 0.07 160);
+  --color-brand-forest-400: oklch(0.64 0.09 160);
+  --color-brand-forest-500: oklch(0.52 0.11 160);
+  --color-brand-forest-600: oklch(0.42 0.10 160);
+  --color-brand-forest-700: oklch(0.34 0.08 160);
+  --color-brand-forest-800: oklch(0.26 0.05 160); /* Primary dark forest green */
+  --color-brand-forest-900: oklch(0.18 0.04 160);
+  --color-brand-forest-950: oklch(0.10 0.02 160);
+
+  /* Brand Emerald/Vibrant Green - Scale representing the light accent theme */
+  --color-brand-emerald-50: oklch(0.97 0.02 145);
+  --color-brand-emerald-100: oklch(0.93 0.04 145);
+  --color-brand-emerald-200: oklch(0.86 0.08 145);
+  --color-brand-emerald-300: oklch(0.78 0.14 145);
+  --color-brand-emerald-400: oklch(0.74 0.19 148); /* Primary vibrant green */
+  --color-brand-emerald-500: oklch(0.65 0.18 148);
+  --color-brand-emerald-600: oklch(0.52 0.15 148);
+  --color-brand-emerald-700: oklch(0.40 0.12 148);
+  --color-brand-emerald-800: oklch(0.28 0.08 148);
+  --color-brand-emerald-900: oklch(0.18 0.05 148);
+
+  /* Legacy Brand token mappings (for backward compatibility) */
+  --color-brand-50: var(--color-brand-forest-50);
+  --color-brand-100: var(--color-brand-forest-100);
+  --color-brand-200: var(--color-brand-forest-200);
+  --color-brand-300: var(--color-brand-forest-300);
+  --color-brand-400: var(--color-brand-forest-400);
+  --color-brand-500: var(--color-brand-forest-500);
+  --color-brand-600: var(--color-brand-forest-600);
+  --color-brand-700: var(--color-brand-forest-800);
+  --color-brand-800: var(--color-brand-forest-900);
+  --color-brand-900: var(--color-brand-forest-950);
+
+  /* Functional Theme Aliases */
   --color-ink: oklch(0.2 0.02 250);
   --color-muted-ink: oklch(0.48 0.03 250);
   --radius-card: 1.25rem;
+  --radius-card-large: 2.5rem;
 }
 
 :root {
@@ -20,6 +61,20 @@ body {
   background: #f8fafc;
   color: var(--color-ink);
   font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--font-display);
+  letter-spacing: -0.02em;
+  font-weight: 700;
 }
 
 * {
