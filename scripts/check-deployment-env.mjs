@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 
 const requiredVariables = [
-  {
-    name: "NEXT_PUBLIC_APP_URL",
-    description: "Public app URL for this deployment target.",
-    validate(value) {
-      return isUrl(value);
-    },
-    hint: "Use the Vercel deployment URL or the configured custom domain.",
-  },
+  // {
+  //   name: "NEXT_PUBLIC_APP_URL",
+  //   description: "Public app URL for this deployment target.",
+  //   validate(value) {
+  //     return isUrl(value);
+  //   },
+  //   hint: "Use the Vercel deployment URL or the configured custom domain.",
+  // },
   {
     name: "NEXT_PUBLIC_SUPABASE_URL",
     description: "Supabase project URL for this environment.",
