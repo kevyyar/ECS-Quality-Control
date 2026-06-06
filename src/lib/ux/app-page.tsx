@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
@@ -46,7 +47,13 @@ export function AppBrandMark() {
   return (
     <div className="flex items-center gap-3">
       <div className="flex items-center justify-center rounded-2xl bg-brand-emerald-400 p-2 shadow-lg shadow-brand-emerald-500/30 ring-1 ring-white/10">
-        <img alt="ECS Quality Control" className="h-7 w-auto" src="/assets/logo.png" />
+        <Image
+          alt="ECS Quality Control"
+          className="h-7 w-auto"
+          height={28}
+          src="/assets/logo.png"
+          width={76}
+        />
       </div>
       <span className="font-display text-xl font-bold tracking-tight text-white">
         ECS Quality Control

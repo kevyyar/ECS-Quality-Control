@@ -1,5 +1,7 @@
 "use client";
 
+import Image from "next/image";
+
 import { LoginForm } from "./login-form";
 
 const APP_BRAND_NAME = "ECS Quality Control";
@@ -36,10 +38,12 @@ export default function LoginPage() {
         {/* Brand mark + wordmark */}
         <div className="relative z-10 flex items-center gap-3 px-12 pt-12 xl:px-16 xl:pt-16">
           <div className="flex items-center justify-center rounded-2xl bg-brand-emerald-400 p-2 shadow-lg shadow-brand-emerald-500/30 ring-1 ring-white/10">
-            <img
+            <Image
               alt="ECS Quality Control"
               className="h-7 w-auto"
+              height={28}
               src="/assets/logo.png"
+              width={76}
             />
           </div>
           <span className="font-display text-2xl font-bold tracking-tight text-white">
@@ -93,10 +97,12 @@ export default function LoginPage() {
         {/* Mobile-only compact brand bar */}
         <div className="absolute inset-x-0 top-0 flex items-center gap-3 border-b border-slate-200/70 bg-white px-6 py-5 lg:hidden">
           <div className="flex items-center justify-center rounded-xl bg-brand-emerald-400 p-1.5 shadow-sm shadow-brand-emerald-500/20">
-            <img
+            <Image
               alt="ECS Quality Control"
               className="h-6 w-auto"
+              height={24}
               src="/assets/logo.png"
+              width={65}
             />
           </div>
           <span className="font-display text-lg font-bold tracking-tight text-slate-950">

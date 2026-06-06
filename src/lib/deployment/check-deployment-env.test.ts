@@ -5,7 +5,6 @@ import { describe, expect, it } from "vitest";
 
 const script = "scripts/check-deployment-env.mjs";
 const validEnv = {
-  NEXT_PUBLIC_APP_URL: "https://ecs-qc.example.com",
   NEXT_PUBLIC_SUPABASE_URL: "https://project.supabase.co",
   NEXT_PUBLIC_SUPABASE_ANON_KEY: "anon-key",
   SUPABASE_SERVICE_ROLE_KEY: "service-role-key",
@@ -37,7 +36,6 @@ function runCheck(env: Record<string, string | undefined>) {
 describe("deployment environment check", () => {
   it("fails with clear diagnostics for missing or placeholder deployment variables", () => {
     const result = runCheck({
-      NEXT_PUBLIC_APP_URL: "https://ecs-qc.example.com",
       NEXT_PUBLIC_SUPABASE_URL: "https://replace-with-production-project.supabase.co",
       DATABASE_URL: "postgresql://replace-with-production-db-url",
     });
@@ -53,11 +51,11 @@ describe("deployment environment check", () => {
   it("rejects non-http deployment URLs", () => {
     const result = runCheck({
       ...validEnv,
-      NEXT_PUBLIC_APP_URL: "ftp://ecs-qc.example.com",
+      NEXT_PUBLIC_SUPABASE_URL: "ftp://project.supabase.co",
     });
 
     expect(result.status).toBe(1);
-    expect(result.stderr).toContain("NEXT_PUBLIC_APP_URL");
+    expect(result.stderr).toContain("NEXT_PUBLIC_SUPABASE_URL");
   });
 
   it("rejects the committed example env files until placeholders are replaced", () => {
