@@ -1292,6 +1292,7 @@ export async function listActiveDraftInspections(): Promise<
     ActiveDraftInspectionSummaryRecord & {
       areaInspectionIds: Set<string>;
       itemIds: Set<string>;
+      answeredItemIds: Set<string>;
     }
   >();
 
@@ -1310,8 +1311,10 @@ export async function listActiveDraftInspections(): Promise<
       startedAt: row.inspection.startedAt,
       areaInspectionCount: 0,
       itemCount: 0,
+      answeredItemCount: 0,
       areaInspectionIds: new Set<string>(),
       itemIds: new Set<string>(),
+      answeredItemIds: new Set<string>(),
     };
 
     if (row.areaInspection) {
@@ -1320,10 +1323,14 @@ export async function listActiveDraftInspections(): Promise<
 
     if (row.item) {
       summary.itemIds.add(row.item.id);
+      if (row.item.resultStatus !== null) {
+        summary.answeredItemIds.add(row.item.id);
+      }
     }
 
     summary.areaInspectionCount = summary.areaInspectionIds.size;
     summary.itemCount = summary.itemIds.size;
+    summary.answeredItemCount = summary.answeredItemIds.size;
     summariesByInspectionId.set(row.inspection.id, summary);
   });
 
@@ -1337,5 +1344,6 @@ export async function listActiveDraftInspections(): Promise<
     startedAt: summary.startedAt,
     areaInspectionCount: summary.areaInspectionCount,
     itemCount: summary.itemCount,
+    answeredItemCount: summary.answeredItemCount,
   }));
 }

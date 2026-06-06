@@ -3,7 +3,7 @@ import { appConfig } from "./app-config";
 
 describe("appConfig", () => {
   it("names the internal janitorial quality-control app", () => {
-    expect(appConfig.name).toBe("Janitorial Quality Control");
+    expect(appConfig.name).toBe("ECS Quality Control");
     expect(appConfig.shortName).toBe("ECS QC");
   });
 });

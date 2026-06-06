@@ -20,6 +20,7 @@ const bricolageGrotesque = Bricolage_Grotesque({
 export const metadata: Metadata = {
   title: appConfig.name,
   description: appConfig.description,
+  icons: [{ rel: "icon", url: "/assets/logo.png" }],
 };
 
 interface RootLayoutProps {

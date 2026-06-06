@@ -720,7 +720,7 @@ export async function renderWeeklyInspectionReportPdf(
     doc,
     pageMargin: PAGE_MARGIN,
     contentWidth: CONTENT_WIDTH,
-    label: "ECS QC · Weekly Inspection Report",
+    label: "ECS Quality Control · Weekly Inspection Report",
     theme,
   });
   doc.end();

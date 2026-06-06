@@ -1059,6 +1059,7 @@ describe("Draft Inspection repository", () => {
         startedAt,
         areaInspectionCount: 1,
         itemCount: 1,
+        answeredItemCount: 0,
       },
     ]);
   });

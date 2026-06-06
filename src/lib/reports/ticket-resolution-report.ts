@@ -460,7 +460,7 @@ export async function renderTicketResolutionReportPdf(
     doc,
     pageMargin: PAGE_MARGIN,
     contentWidth: CONTENT_WIDTH,
-    label: "ECS QC · Ticket Resolution Report",
+    label: "ECS Quality Control · Ticket Resolution Report",
     theme,
   });
   doc.end();

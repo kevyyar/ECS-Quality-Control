@@ -237,6 +237,7 @@ export type ActiveDraftInspectionSummaryRecord = {
   startedAt: Date;
   areaInspectionCount: number;
   itemCount: number;
+  answeredItemCount: number;
 };
 
 export type DraftSubmissionValidation = {

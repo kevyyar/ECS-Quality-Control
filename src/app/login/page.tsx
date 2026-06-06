@@ -2,7 +2,7 @@
 
 import { LoginForm } from "./login-form";
 
-const APP_BRAND_NAME = "ECS QC";
+const APP_BRAND_NAME = "ECS Quality Control";
 
 export default function LoginPage() {
   return (
@@ -35,18 +35,12 @@ export default function LoginPage() {
 
         {/* Brand mark + wordmark */}
         <div className="relative z-10 flex items-center gap-3 px-12 pt-12 xl:px-16 xl:pt-16">
-          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-brand-emerald-400 shadow-lg shadow-brand-emerald-500/30 ring-1 ring-white/10">
-            <svg
-              className="h-6 w-6 text-brand-forest-900"
-              fill="none"
-              stroke="currentColor"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="2.5"
-              viewBox="0 0 24 24"
-            >
-              <path d="M5 12.5l4.5 4.5L19 7" />
-            </svg>
+          <div className="flex items-center justify-center rounded-2xl bg-brand-emerald-400 p-2 shadow-lg shadow-brand-emerald-500/30 ring-1 ring-white/10">
+            <img
+              alt="ECS Quality Control"
+              className="h-7 w-auto"
+              src="/assets/logo.png"
+            />
           </div>
           <span className="font-display text-2xl font-bold tracking-tight text-white">
             {APP_BRAND_NAME}
@@ -57,7 +51,7 @@ export default function LoginPage() {
         <div className="relative z-10 max-w-xl space-y-6 px-12 xl:px-16">
           <p className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] text-brand-emerald-200 backdrop-blur-sm">
             <span className="h-1.5 w-1.5 rounded-full bg-brand-emerald-400 shadow-[0_0_8px_var(--color-brand-emerald-400)]" />
-            Janitorial Quality Control
+            ECS Quality Control
           </p>
           <h2 className="text-balance font-display text-4xl font-bold leading-[1.05] tracking-tight text-white xl:text-[3.4rem]">
             Inspection&#8209;grade{" "}
@@ -98,18 +92,12 @@ export default function LoginPage() {
       <section className="relative flex items-center justify-center px-6 py-10 sm:px-10">
         {/* Mobile-only compact brand bar */}
         <div className="absolute inset-x-0 top-0 flex items-center gap-3 border-b border-slate-200/70 bg-white px-6 py-5 lg:hidden">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-emerald-400 shadow-sm shadow-brand-emerald-500/20">
-            <svg
-              className="h-5 w-5 text-brand-forest-900"
-              fill="none"
-              stroke="currentColor"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="2.5"
-              viewBox="0 0 24 24"
-            >
-              <path d="M5 12.5l4.5 4.5L19 7" />
-            </svg>
+          <div className="flex items-center justify-center rounded-xl bg-brand-emerald-400 p-1.5 shadow-sm shadow-brand-emerald-500/20">
+            <img
+              alt="ECS Quality Control"
+              className="h-6 w-auto"
+              src="/assets/logo.png"
+            />
           </div>
           <span className="font-display text-lg font-bold tracking-tight text-slate-950">
             {APP_BRAND_NAME}
