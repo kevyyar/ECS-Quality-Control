@@ -1,12 +1,24 @@
-import Link from "next/link";
-import type { ReactNode } from "react";
+import { Suspense } from "react";
 
 import { signOutInternalUser } from "@/lib/auth/actions";
 import { canPerformProtectedAction } from "@/lib/auth/capabilities";
 import { requireInternalUser } from "@/lib/auth/session";
-import { getDashboardMetrics } from "@/lib/dashboard/repository";
+import { dashboardRangeSearchKey } from "@/lib/dashboard/range-url";
 import { resolveDateRange } from "@/lib/date-ranges";
-import { listActiveDraftInspections } from "@/lib/inspections/drafts/repository";
+import {
+  AppBrandMark,
+  AppPage,
+  AppPageBody,
+  AppPageHero,
+  PageSection,
+} from "@/lib/ux/app-page";
+import { Glyph } from "@/lib/ux/glyph";
+import { ux } from "@/lib/ux/tokens";
+
+import { DashboardMetrics } from "./dashboard-metrics";
+import { DashboardMetricsSkeleton } from "./dashboard-metrics-skeleton";
+import { DashboardRangeFilter } from "./dashboard-range-filter";
+import { DashboardRangeSubtitle } from "./dashboard-range-subtitle";
 
 type DashboardPageProps = {
   searchParams?: Promise<{
@@ -16,466 +28,6 @@ type DashboardPageProps = {
   }>;
 };
 
-type RangePreset = "this-week" | "last-week" | "this-month" | "custom";
-
-const RANGE_PRESETS: { value: RangePreset; label: string; hint: string }[] = [
-  { value: "this-week", label: "This Week", hint: "Mon → Sun" },
-  { value: "last-week", label: "Last Week", hint: "Mon → Sun" },
-  { value: "this-month", label: "This Month", hint: "Calendar month" },
-  { value: "custom", label: "Custom", hint: "Pick a range" },
-];
-
-function formatDateTime(date: Date): string {
-  return new Intl.DateTimeFormat("en-US", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(date);
-}
-
-function formatDateRangeLabel(startAt: Date, endBefore: Date): string {
-  const endDisplay = new Date(endBefore.getTime() - 86_400_000);
-  const fmt = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" });
-  return `${fmt.format(startAt)} – ${fmt.format(endDisplay)}`;
-}
-
-function passRate(pass: number, fail: number): number | null {
-  const denom = pass + fail;
-  if (denom === 0) return null;
-  return Math.round((pass / denom) * 100);
-}
-
-function clampPercent(value: number, min: number): number {
-  if (!Number.isFinite(value) || value <= 0) return 0;
-  return Math.max(min, Math.min(100, value));
-}
-
-/* ────────── Icons (inline SVG, currentColor) ────────── */
-
-function Icon({ d, className }: { d: string; className?: string | undefined }) {
-  return (
-    <svg
-      className={className}
-      fill="none"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="1.75"
-      viewBox="0 0 24 24"
-      aria-hidden="true"
-    >
-      <path d={d} />
-    </svg>
-  );
-}
-
-const ICONS = {
-  ticket: "M3 8.25A2.25 2.25 0 0 1 5.25 6h13.5A2.25 2.25 0 0 1 21 8.25v7.5A2.25 2.25 0 0 1 18.75 18H5.25A2.25 2.25 0 0 1 3 15.75v-7.5Zm9 4.5h.008v.008H12v-.008Z",
-  check: "M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z",
-  warn: "M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z",
-  shield: "M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z",
-  draft: "M16.862 4.487 18.549 2.799a2.121 2.121 0 1 1 3 3L19.862 7.487m-3-3L6.375 17.963a4.5 4.5 0 0 1-1.682 1.182L2.5 20.25l1.104-2.193a4.5 4.5 0 0 1 1.182-1.682l10.5-10.5m-2.424 2.424 2.424 2.424",
-  building: "M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21",
-  arrow: "M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3",
-  spark: "M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09Z",
-  logout: "M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0 3-3m0 0-3-3m3 3H9",
-  cal: "M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5",
-} as const;
-
-type IconKey = keyof typeof ICONS;
-
-function Glyph({ name, className }: { name: IconKey; className?: string }) {
-  return <Icon className={className} d={ICONS[name]} />;
-}
-
-/* ────────── Donut chart for inspection results ────────── */
-
-function ResultDonut({
-  pass,
-  fail,
-  notApplicable,
-}: {
-  pass: number;
-  fail: number;
-  notApplicable: number;
-}) {
-  const total = pass + fail + notApplicable;
-  const rate = passRate(pass, fail);
-
-  if (total === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center gap-3 py-10 text-center">
-        <div className="flex size-32 items-center justify-center rounded-full border border-dashed border-slate-300 text-slate-400">
-          <Glyph className="size-10" name="draft" />
-        </div>
-        <div>
-          <p className="font-display text-base font-semibold text-slate-900">
-            No inspection results yet
-          </p>
-          <p className="mt-1 text-sm text-muted-ink">
-            Submitted Inspections will appear here once Supervisors close them.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  const passPct = (pass / total) * 100;
-  const failPct = (fail / total) * 100;
-
-  return (
-    <div className="grid items-center gap-6 sm:grid-cols-[auto_1fr]">
-      <div className="relative mx-auto">
-        <div
-          aria-label={`Pass ${pass}, Fail ${fail}, N/A ${notApplicable}`}
-          className="relative size-44 rounded-full"
-          role="img"
-          style={{
-            background: `conic-gradient(
-              var(--color-brand-emerald-500) 0% ${passPct}%,
-              oklch(0.62 0.21 25) ${passPct}% ${passPct + failPct}%,
-              oklch(0.78 0.02 250) ${passPct + failPct}% 100%
-            )`,
-          }}
-        >
-          <div className="absolute inset-2 rounded-full bg-white shadow-[inset_0_1px_0_rgba(15,23,42,0.04)]" />
-        </div>
-        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-          <span className="font-display text-3xl font-bold text-slate-950">
-            {rate === null ? "—" : `${rate}%`}
-          </span>
-          <span className="mt-0.5 text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-muted-ink">
-            Pass rate
-          </span>
-        </div>
-      </div>
-
-      <ul className="space-y-2.5">
-        <LegendDot color="var(--color-brand-emerald-500)" label="Pass" value={pass} />
-        <LegendDot color="oklch(0.62 0.21 25)" label="Fail" value={fail} />
-        <LegendDot color="oklch(0.78 0.02 250)" label="N/A" value={notApplicable} />
-        <li className="pt-2 text-xs text-muted-ink">
-          Of {pass + fail} applicable items across {total} total.
-        </li>
-      </ul>
-    </div>
-  );
-}
-
-function LegendDot({
-  color,
-  label,
-  value,
-}: {
-  color: string;
-  label: string;
-  value: number;
-}) {
-  return (
-    <li className="flex items-center justify-between gap-3 rounded-xl border border-slate-200/70 bg-white/60 px-3 py-2">
-      <span className="flex items-center gap-2.5 text-sm font-medium text-slate-800">
-        <span
-          aria-hidden="true"
-          className="size-2.5 rounded-full ring-2 ring-white"
-          style={{ background: color, boxShadow: `0 0 0 1px ${color}22` }}
-        />
-        {label}
-      </span>
-      <span className="font-display text-base font-semibold tabular-nums text-slate-950">
-        {value}
-      </span>
-    </li>
-  );
-}
-
-/* ────────── Stat tile ────────── */
-
-function StatTile({
-  label,
-  value,
-  delta,
-  tone,
-  icon,
-}: {
-  label: string;
-  value: string | number;
-  delta?: { text: string; tone: "up" | "down" | "neutral" } | undefined;
-  tone: "emerald" | "forest" | "amber" | "slate";
-  icon: ReactNode;
-}) {
-  const toneStyles: Record<typeof tone, string> = {
-    emerald:
-      "from-brand-emerald-500/15 via-brand-emerald-400/5 to-transparent text-brand-emerald-700 ring-brand-emerald-500/20",
-    forest:
-      "from-brand-forest-500/15 via-brand-forest-400/5 to-transparent text-brand-forest-700 ring-brand-forest-500/20",
-    amber:
-      "from-amber-500/15 via-amber-400/5 to-transparent text-amber-700 ring-amber-500/20",
-    slate: "from-slate-500/10 via-slate-400/5 to-transparent text-slate-700 ring-slate-400/20",
-  };
-
-  return (
-    <div
-      className={`relative overflow-hidden rounded-2xl border border-slate-200/70 bg-white p-5 ring-1 shadow-[0_1px_0_rgba(15,23,42,0.02)] transition hover:shadow-md ${toneStyles[tone]}`}
-    >
-      <div
-        aria-hidden="true"
-        className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${toneStyles[tone].split(" ")[0]} ${toneStyles[tone].split(" ")[1]} ${toneStyles[tone].split(" ")[2]}`}
-      />
-      <div className="relative flex items-start justify-between gap-3">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-ink">
-            {label}
-          </p>
-          <p className="mt-3 font-display text-4xl font-bold leading-none tracking-tight text-slate-950 tabular-nums">
-            {value}
-          </p>
-          {delta ? (
-            <p
-              className={`mt-3 inline-flex items-center gap-1 text-xs font-semibold ${
-                delta.tone === "up"
-                  ? "text-brand-emerald-700"
-                  : delta.tone === "down"
-                  ? "text-rose-600"
-                  : "text-muted-ink"
-              }`}
-            >
-              <span aria-hidden="true">{delta.tone === "up" ? "↑" : delta.tone === "down" ? "↓" : "·"}</span>
-              {delta.text}
-            </p>
-          ) : null}
-        </div>
-        <div
-          className={`flex size-10 items-center justify-center rounded-xl bg-white shadow-sm ring-1 ring-slate-200/60 ${toneStyles[tone].split(" ").pop()}`}
-        >
-          {icon}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ────────── Building rank bar ────────── */
-
-function BuildingRank({
-  rank,
-  name,
-  count,
-  max,
-}: {
-  rank: number;
-  name: string;
-  count: number;
-  max: number;
-}) {
-  const pct = clampPercent((count / Math.max(max, 1)) * 100, 8);
-  const isTop3 = rank < 3;
-
-  return (
-    <li className="group flex items-center gap-4 rounded-xl px-1 py-1.5 transition hover:bg-slate-50">
-      <span
-        aria-hidden="true"
-        className={`flex size-7 shrink-0 items-center justify-center rounded-lg text-xs font-bold tabular-nums ${
-          isTop3
-            ? "bg-brand-forest-800 text-brand-emerald-300"
-            : "bg-slate-100 text-slate-500"
-        }`}
-      >
-        {rank + 1}
-      </span>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-baseline justify-between gap-3">
-          <p className="truncate text-sm font-semibold text-slate-900">{name}</p>
-          <p className="font-display text-base font-bold tabular-nums text-slate-950">
-            {count}
-          </p>
-        </div>
-        <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-100">
-          <div
-            className="h-full rounded-full bg-gradient-to-r from-brand-forest-700 to-brand-emerald-500"
-            style={{ width: `${pct}%` }}
-          />
-        </div>
-      </div>
-    </li>
-  );
-}
-
-/* ────────── Active draft row ────────── */
-
-function DraftRow({
-  building,
-  client,
-  startedByEmail,
-  startedAt,
-  areaCount,
-  itemCount,
-  canEdit,
-  draftId,
-}: {
-  building: string;
-  client: string;
-  startedByEmail: string;
-  startedAt: Date;
-  areaCount: number;
-  itemCount: number;
-  canEdit: boolean;
-  draftId: string;
-}) {
-  return (
-    <li className="group relative flex flex-col gap-4 rounded-2xl border border-slate-200/80 bg-white p-5 transition hover:border-brand-forest-300 hover:shadow-sm sm:flex-row sm:items-center sm:justify-between">
-      <div className="flex min-w-0 items-start gap-4">
-        <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-brand-forest-100 to-brand-emerald-100 text-brand-forest-800 ring-1 ring-brand-forest-200/60">
-          <Glyph className="size-5" name="draft" />
-        </div>
-        <div className="min-w-0 space-y-1">
-          <p className="truncate font-display text-base font-semibold text-slate-950">
-            {building}
-          </p>
-          <p className="truncate text-sm text-muted-ink">
-            {client} · Started {formatDateTime(startedAt)} by{" "}
-            <span className="font-medium text-slate-700">{startedByEmail}</span>
-          </p>
-          <div className="flex flex-wrap gap-1.5 pt-1">
-            <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[0.68rem] font-semibold uppercase tracking-wider text-slate-700">
-              {areaCount} areas
-            </span>
-            <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[0.68rem] font-semibold uppercase tracking-wider text-slate-700">
-              {itemCount} items
-            </span>
-          </div>
-        </div>
-      </div>
-      {canEdit ? (
-        <Link
-          className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-brand-forest-800 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-forest-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-400"
-          href={`/inspections/drafts/${draftId}`}
-        >
-          Continue
-          <Glyph className="size-3.5" name="arrow" />
-        </Link>
-      ) : (
-        <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-          Read-only metadata
-        </span>
-      )}
-    </li>
-  );
-}
-
-/* ────────── Range filter (pill radio + dates) ────────── */
-
-function RangeFilter({
-  preset,
-  startDateInput,
-  endDateInput,
-  isCustomValid,
-}: {
-  preset: RangePreset;
-  startDateInput: string;
-  endDateInput: string;
-  isCustomValid: boolean;
-}) {
-  return (
-    <form className="space-y-4" method="get">
-      <div
-        className="inline-flex flex-wrap items-center gap-1 rounded-2xl border border-slate-200 bg-slate-50 p-1"
-        role="radiogroup"
-      >
-        {RANGE_PRESETS.map((option) => {
-          const isActive = preset === option.value;
-          return (
-            <label
-              className={`group relative flex cursor-pointer items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-semibold transition ${
-                isActive
-                  ? "bg-white text-slate-950 shadow-sm ring-1 ring-slate-200"
-                  : "text-muted-ink hover:text-slate-900"
-              }`}
-              key={option.value}
-            >
-              <input
-                className="sr-only"
-                defaultChecked={isActive}
-                name="range"
-                type="radio"
-                value={option.value}
-              />
-              <span>{option.label}</span>
-              <span
-                className={`text-[0.65rem] font-medium uppercase tracking-wider ${
-                  isActive ? "text-brand-forest-700" : "text-slate-400"
-                }`}
-              >
-                {option.hint}
-              </span>
-            </label>
-          );
-        })}
-      </div>
-
-      <div className="grid gap-3 sm:grid-cols-3">
-        <label className="space-y-1.5" htmlFor="dashboard-start-date">
-          <span className="text-xs font-semibold uppercase tracking-wider text-muted-ink">
-            Start date
-          </span>
-          <div className="relative">
-            <Glyph
-              className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400"
-              name="cal"
-            />
-            <input
-              className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-9 pr-3 text-sm text-slate-950 shadow-sm focus:border-brand-forest-500 focus:outline-none focus:ring-2 focus:ring-brand-emerald-200"
-              defaultValue={startDateInput}
-              id="dashboard-start-date"
-              name="startDate"
-              type="date"
-            />
-          </div>
-        </label>
-        <label className="space-y-1.5" htmlFor="dashboard-end-date">
-          <span className="text-xs font-semibold uppercase tracking-wider text-muted-ink">
-            End date
-          </span>
-          <div className="relative">
-            <Glyph
-              className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400"
-              name="cal"
-            />
-            <input
-              className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-9 pr-3 text-sm text-slate-950 shadow-sm focus:border-brand-forest-500 focus:outline-none focus:ring-2 focus:ring-brand-emerald-200"
-              defaultValue={endDateInput}
-              id="dashboard-end-date"
-              name="endDate"
-              type="date"
-            />
-          </div>
-        </label>
-        <div className="flex flex-wrap items-end gap-3">
-          <button
-            className="inline-flex h-[42px] items-center gap-2 rounded-xl bg-brand-forest-800 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-forest-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-400"
-            type="submit"
-          >
-            Apply range
-            <Glyph className="size-3.5" name="arrow" />
-          </button>
-          <Link
-            className="inline-flex h-[42px] items-center text-sm font-semibold text-brand-forest-700 transition hover:text-brand-forest-900"
-            href="/dashboard"
-          >
-            Reset
-          </Link>
-        </div>
-      </div>
-
-      {!isCustomValid ? (
-        <p className="rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-sm text-rose-700">
-          Custom range was invalid, so the dashboard is showing This Week.
-        </p>
-      ) : null}
-    </form>
-  );
-}
-
-/* ────────── Page ────────── */
-
 export default async function DashboardPage({ searchParams }: DashboardPageProps) {
   const params = await searchParams;
   const range = resolveDateRange({
@@ -483,6 +35,12 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     startDate: params?.startDate,
     endDate: params?.endDate,
   });
+  const rangeKey = dashboardRangeSearchKey({
+    range: params?.range,
+    startDate: params?.startDate,
+    endDate: params?.endDate,
+  });
+
   const user = await requireInternalUser();
   const canViewActiveDraftMetadata = canPerformProtectedAction(
     user.capabilities,
@@ -492,332 +50,84 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     user.capabilities,
     "editDraftInspection",
   );
-  const [metrics, activeDrafts] = await Promise.all([
-    getDashboardMetrics({ startAt: range.startAt, endBefore: range.endBefore }),
-    canViewActiveDraftMetadata ? listActiveDraftInspections() : Promise.resolve([]),
-  ]);
-
-  const resultTotal =
-    metrics.inspectionResultCounts.pass +
-    metrics.inspectionResultCounts.fail +
-    metrics.inspectionResultCounts.notApplicable;
-
-  const rate = passRate(metrics.inspectionResultCounts.pass, metrics.inspectionResultCounts.fail);
-
-  const closedDelta =
-    metrics.ticketStatusCounts.closed > 0 && metrics.ticketStatusCounts.open > 0
-      ? Math.round(
-          (metrics.ticketStatusCounts.closed /
-            (metrics.ticketStatusCounts.closed + metrics.ticketStatusCounts.open)) *
-            100,
-        )
-      : null;
-
-  const buildingMax = Math.max(
-    0,
-    ...metrics.openTicketsByBuilding.map((building) => building.openTicketCount),
-  );
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-slate-50 text-ink">
-      {/* Soft background texture */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 opacity-[0.35]"
-        style={{
-          backgroundImage:
-            "radial-gradient(ellipse 80% 50% at 50% -20%, color-mix(in oklch, var(--color-brand-emerald-300) 18%, transparent), transparent 60%), radial-gradient(ellipse 60% 40% at 0% 0%, color-mix(in oklch, var(--color-brand-forest-300) 12%, transparent), transparent 50%)",
-        }}
+    <AppPage>
+      <AppPageHero
+        actions={
+          <form action={signOutInternalUser}>
+            <button className={ux.heroLogoutButton} type="submit">
+              <Glyph className="size-4" name="logout" />
+              Log out
+            </button>
+          </form>
+        }
+        description={
+          <Suspense
+            fallback={
+              <p>
+                {user.email} · {range.label}
+              </p>
+            }
+          >
+            <DashboardRangeSubtitle
+              email={user.email}
+              initialEndBefore={range.endBefore.toISOString()}
+              initialLabel={range.label}
+              initialStartAt={range.startAt.toISOString()}
+            />
+          </Suspense>
+        }
+        eyebrow="Internal workspace"
+        footer={
+          user.capabilities.length > 0 ? (
+            <div className="flex flex-wrap gap-1.5">
+              {user.capabilities.map((capability) => (
+                <span className={ux.capabilityBadge} key={capability}>
+                  <Glyph className="size-3 text-brand-emerald-300" name="shield" />
+                  {capability}
+                </span>
+              ))}
+            </div>
+          ) : null
+        }
+        layout="dashboard"
+        leading={<AppBrandMark />}
+        title="Quality control,"
+        titleAccent="at a glance."
       />
 
-      {/* ── Hero / identity strip ── */}
-      <section className="relative overflow-hidden">
-        <div
-          aria-hidden="true"
-          className="absolute inset-0 bg-gradient-to-br from-brand-forest-950 via-brand-forest-800 to-brand-forest-700"
-        />
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0"
-          style={{
-            background:
-              "radial-gradient(circle at 18% 22%, color-mix(in oklch, var(--color-brand-emerald-500) 28%, transparent) 0%, transparent 45%), radial-gradient(circle at 82% 78%, color-mix(in oklch, var(--color-brand-emerald-400) 22%, transparent) 0%, transparent 50%)",
-          }}
-        />
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 opacity-[0.07]"
-          style={{
-            backgroundImage:
-              "linear-gradient(rgba(255,255,255,0.6) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.6) 1px, transparent 1px)",
-            backgroundSize: "56px 56px",
-            maskImage:
-              "radial-gradient(ellipse at center, black 30%, transparent 75%)",
-            WebkitMaskImage:
-              "radial-gradient(ellipse at center, black 30%, transparent 75%)",
-          }}
-        />
-
-        <div className="relative mx-auto max-w-6xl px-6 pb-12 pt-10 sm:px-10 lg:pb-16 lg:pt-14">
-          <div className="flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
-            <div className="space-y-6">
-              <div className="flex items-center gap-3">
-                <div className="flex items-center justify-center rounded-2xl bg-brand-emerald-400 p-2 shadow-lg shadow-brand-emerald-500/30 ring-1 ring-white/10">
-                  <img
-                    alt="ECS Quality Control"
-                    className="h-7 w-auto"
-                    src="/assets/logo.png"
-                  />
-                </div>
-                <span className="font-display text-xl font-bold tracking-tight text-white">
-                  ECS Quality Control
-                </span>
-              </div>
-
-              <div className="space-y-3">
-                <p className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1 text-[0.7rem] font-semibold uppercase tracking-[0.22em] text-brand-emerald-200 backdrop-blur-sm">
-                  <span className="h-1.5 w-1.5 rounded-full bg-brand-emerald-400 shadow-[0_0_8px_var(--color-brand-emerald-400)]" />
-                  Internal workspace
-                </p>
-                <h1 className="text-balance font-display text-4xl font-bold leading-[1.05] tracking-tight text-white sm:text-5xl">
-                  Quality control, <span className="text-brand-emerald-300">at a glance.</span>
-                </h1>
-                <p className="max-w-xl text-base leading-relaxed text-white/70">
-                  {user.email} · {range.label} ({formatDateRangeLabel(range.startAt, range.endBefore)})
-                </p>
-              </div>
-
-              {user.capabilities.length > 0 ? (
-                <div className="flex flex-wrap gap-1.5">
-                  {user.capabilities.map((capability) => (
-                    <span
-                      className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-3 py-1 text-[0.7rem] font-semibold uppercase tracking-wider text-white/85 backdrop-blur-sm"
-                      key={capability}
-                    >
-                      <Glyph className="size-3 text-brand-emerald-300" name="shield" />
-                      {capability}
-                    </span>
-                  ))}
-                </div>
-              ) : null}
-            </div>
-
-            <form action={signOutInternalUser}>
-              <button
-                className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-4 py-2.5 text-sm font-semibold text-white backdrop-blur-sm transition hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-300"
-                type="submit"
-              >
-                <Glyph className="size-4" name="logout" />
-                Log out
-              </button>
-            </form>
-          </div>
-        </div>
-      </section>
-
-      {/* ── Main canvas ── */}
-      <div className="relative mx-auto -mt-6 max-w-6xl space-y-8 px-6 pb-16 sm:px-10">
-        {/* Range filter card */}
-        <section
-          aria-labelledby="dashboard-range-heading"
-          className="rounded-2xl border border-slate-200/70 bg-white p-5 shadow-sm sm:p-6"
+      <AppPageBody overlap="dashboard">
+        <PageSection
+          description="Metrics use Submitted Inspections and their Tickets only. Draft Inspection data is excluded."
+          heading="Reporting window"
+          headingId="dashboard-range-heading"
+          icon="clock"
         >
-          <div className="mb-5 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <h2
-                className="font-display text-base font-semibold text-slate-950"
-                id="dashboard-range-heading"
-              >
-                Reporting window
-              </h2>
-              <p className="mt-0.5 text-sm text-muted-ink">
-                Metrics use Submitted Inspections and their Tickets only. Draft Inspection data
-                is excluded.
-              </p>
-            </div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-brand-forest-700">
-              {resultTotal} inspection items · {metrics.ticketStatusCounts.open +
-                metrics.ticketStatusCounts.closed}{" "}
-              tickets
-            </p>
-          </div>
-          <RangeFilter
-            endDateInput={range.endDateInput}
-            isCustomValid={range.isCustomValid}
-            preset={range.preset}
-            startDateInput={range.startDateInput}
-          />
-        </section>
-
-        {/* Stat tiles */}
-        <section
-          aria-label="Key metrics"
-          className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"
-        >
-          <StatTile
-            delta={
-              closedDelta === null
-                ? undefined
-                : { text: `${closedDelta}% closed`, tone: closedDelta >= 70 ? "up" : "neutral" }
-            }
-            icon={<Glyph className="size-5" name="ticket" />}
-            label="Open Tickets"
-            tone="forest"
-            value={metrics.ticketStatusCounts.open}
-          />
-          <StatTile
-            icon={<Glyph className="size-5" name="check" />}
-            label="Closed Tickets"
-            tone="emerald"
-            value={metrics.ticketStatusCounts.closed}
-          />
-          <StatTile
-            delta={
-              rate === null
-                ? { text: "No applicable items", tone: "neutral" }
-                : { text: `${rate}% pass rate`, tone: rate >= 80 ? "up" : rate >= 60 ? "neutral" : "down" }
-            }
-            icon={<Glyph className="size-5" name="shield" />}
-            label="Pass Rate"
-            tone={rate === null ? "slate" : rate >= 80 ? "emerald" : rate >= 60 ? "amber" : "amber"}
-            value={rate === null ? "—" : `${rate}%`}
-          />
-          <StatTile
-            icon={<Glyph className="size-5" name="draft" />}
-            label="Active Drafts"
-            tone="slate"
-            value={activeDrafts.length}
-          />
-        </section>
-
-        {/* Charts row */}
-        <section className="grid gap-6 lg:grid-cols-5">
-          <article className="rounded-2xl border border-slate-200/70 bg-white p-6 shadow-sm lg:col-span-3">
-            <header className="mb-5 flex items-start justify-between gap-3">
-              <div>
-                <h2 className="font-display text-lg font-semibold text-slate-950">
-                  Inspection Result breakdown
-                </h2>
-                <p className="mt-0.5 text-sm text-muted-ink">
-                  Pass · Fail · N/A across all Submitted Inspections in this range.
-                </p>
-              </div>
-              <span className="hidden items-center gap-1 rounded-full bg-brand-emerald-50 px-2.5 py-1 text-[0.65rem] font-semibold uppercase tracking-wider text-brand-emerald-700 sm:inline-flex">
-                <Glyph className="size-3" name="spark" />
-                Live
-              </span>
-            </header>
-            <ResultDonut
-              fail={metrics.inspectionResultCounts.fail}
-              notApplicable={metrics.inspectionResultCounts.notApplicable}
-              pass={metrics.inspectionResultCounts.pass}
+          <Suspense fallback={<div className="h-32 animate-pulse rounded-xl bg-slate-100" />}>
+            <DashboardRangeFilter
+              initialEndDateInput={range.endDateInput}
+              initialIsCustomValid={range.isCustomValid}
+              initialPreset={range.preset}
+              initialStartDateInput={range.startDateInput}
             />
-          </article>
+          </Suspense>
+        </PageSection>
 
-          <article className="rounded-2xl border border-slate-200/70 bg-white p-6 shadow-sm lg:col-span-2">
-            <header className="mb-5 flex items-start justify-between gap-3">
-              <div>
-                <h2 className="font-display text-lg font-semibold text-slate-950">
-                  Open Tickets by Building
-                </h2>
-                <p className="mt-0.5 text-sm text-muted-ink">
-                  Where to focus your next walk-through.
-                </p>
-              </div>
-              <Glyph className="size-5 shrink-0 text-brand-forest-700" name="building" />
-            </header>
-            {metrics.openTicketsByBuilding.length === 0 ? (
-              <div className="flex flex-col items-center justify-center gap-2 py-10 text-center">
-                <div className="flex size-12 items-center justify-center rounded-full bg-brand-emerald-50 text-brand-emerald-700">
-                  <Glyph className="size-6" name="check" />
-                </div>
-                <p className="font-display text-base font-semibold text-slate-900">
-                  No open tickets
-                </p>
-                <p className="text-sm text-muted-ink">Every Building is fully resolved.</p>
-              </div>
-            ) : (
-              <ul className="space-y-1.5">
-                {metrics.openTicketsByBuilding.map((building, index) => (
-                  <BuildingRank
-                    count={building.openTicketCount}
-                    key={building.buildingId}
-                    max={buildingMax}
-                    name={building.buildingName}
-                    rank={index}
-                  />
-                ))}
-              </ul>
-            )}
-          </article>
-        </section>
-
-        {/* Active drafts */}
-        {canViewActiveDraftMetadata ? (
-          <section
-            aria-labelledby="active-draft-inspections-heading"
-            className="rounded-2xl border border-slate-200/70 bg-white p-6 shadow-sm sm:p-7"
-          >
-            <header className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-              <div>
-                <p className="text-[0.7rem] font-semibold uppercase tracking-[0.22em] text-brand-forest-700">
-                  In progress
-                </p>
-                <h2
-                  className="mt-1 font-display text-lg font-semibold text-slate-950"
-                  id="active-draft-inspections-heading"
-                >
-                  Active Draft Inspections
-                </h2>
-                <p className="mt-0.5 text-sm text-muted-ink">
-                  Drafts are kept separate from completed and reportable inspection data.
-                </p>
-              </div>
-              <Link
-                className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-forest-700 transition hover:text-brand-forest-900"
-                href="/inspections/drafts"
-              >
-                View all Drafts
-                <Glyph className="size-3.5" name="arrow" />
-              </Link>
-            </header>
-
-            {activeDrafts.length === 0 ? (
-              <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-slate-200 bg-slate-50 py-10 text-center">
-                <div className="flex size-12 items-center justify-center rounded-full bg-white text-slate-400 shadow-sm ring-1 ring-slate-200">
-                  <Glyph className="size-6" name="draft" />
-                </div>
-                <p className="font-display text-base font-semibold text-slate-900">
-                  No active drafts
-                </p>
-                <p className="text-sm text-muted-ink">
-                  Started Drafts will appear here while Supervisors are in the field.
-                </p>
-              </div>
-            ) : (
-              <ul className="space-y-3">
-                {activeDrafts.map((draft) => (
-                  <DraftRow
-                    areaCount={draft.areaInspectionCount}
-                    building={draft.buildingNameSnapshot}
-                    canEdit={canEditDrafts}
-                    client={draft.clientNameSnapshot}
-                    draftId={draft.id}
-                    itemCount={draft.itemCount}
-                    key={draft.id}
-                    startedAt={draft.startedAt}
-                    startedByEmail={draft.startedByEmail}
-                  />
-                ))}
-              </ul>
-            )}
-          </section>
-        ) : null}
+        <Suspense fallback={<DashboardMetricsSkeleton />} key={rangeKey}>
+          <DashboardMetrics
+            canEditDrafts={canEditDrafts}
+            canViewActiveDraftMetadata={canViewActiveDraftMetadata}
+            endDate={params?.endDate}
+            range={params?.range}
+            startDate={params?.startDate}
+          />
+        </Suspense>
 
         <footer className="pt-2 text-center text-xs text-muted-ink">
           ECS Quality Control · Internal supervisor &amp; manager workspace
         </footer>
-      </div>
-    </main>
+      </AppPageBody>
+    </AppPage>
   );
 }

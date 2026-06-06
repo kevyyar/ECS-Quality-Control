@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 const files = {
   dashboard: readFileSync("src/app/dashboard/page.tsx", "utf8"),
+  dashboardRangeFilter: readFileSync("src/app/dashboard/dashboard-range-filter.tsx", "utf8"),
   inspections: readFileSync("src/app/inspections/page.tsx", "utf8"),
   tickets: readFileSync("src/app/tickets/page.tsx", "utf8"),
   draftEditor: readFileSync("src/app/inspections/drafts/draft-inspection-editor.tsx", "utf8"),
@@ -12,7 +13,7 @@ const files = {
 
 describe("MVP responsive, accessibility, and UX polish", () => {
   it("lets filter action rows wrap on narrow screens", () => {
-    expect(files.dashboard).toContain("flex flex-wrap items-end gap-3");
+    expect(files.dashboardRangeFilter).toContain("flex flex-wrap items-end gap-3");
     expect(files.inspections).toContain("flex flex-wrap items-end gap-3");
     expect(files.tickets).toContain("flex flex-wrap items-end gap-3");
   });
