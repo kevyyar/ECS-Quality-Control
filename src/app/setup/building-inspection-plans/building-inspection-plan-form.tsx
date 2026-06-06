@@ -7,6 +7,7 @@ import type {
   BuildingInspectionPlanRecord,
   InspectionTemplateSetupRecord,
 } from "@/lib/client-building-setup/model";
+import { ux } from "@/lib/ux/tokens";
 
 import {
   saveBuildingInspectionPlanAction,
@@ -156,7 +157,7 @@ export function BuildingInspectionPlanForm({
                 </legend>
                 <div className="flex flex-wrap gap-2">
                   <button
-                    className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-900 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    className={ux.compactButton}
                     disabled={index === 0}
                     onClick={() => moveRow(index, -1)}
                     type="button"
@@ -164,7 +165,7 @@ export function BuildingInspectionPlanForm({
                     Up
                   </button>
                   <button
-                    className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-900 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    className={ux.compactButton}
                     disabled={index === rows.length - 1}
                     onClick={() => moveRow(index, 1)}
                     type="button"
@@ -172,7 +173,7 @@ export function BuildingInspectionPlanForm({
                     Down
                   </button>
                   <button
-                    className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-900 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    className={ux.compactButton}
                     disabled={rows.length === 1}
                     onClick={() => removeRow(index)}
                     type="button"
@@ -185,7 +186,7 @@ export function BuildingInspectionPlanForm({
               <label className="space-y-2" htmlFor={`plan-area-${row.key}`}>
                 <span className="text-sm font-semibold text-slate-900">Area</span>
                 <select
-                  className="w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-950 shadow-sm focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100"
+                  className={ux.input}
                   id={`plan-area-${row.key}`}
                   name="areaId"
                   onChange={(event) => updateRow(index, { areaId: event.target.value })}
@@ -212,7 +213,7 @@ export function BuildingInspectionPlanForm({
                   Inspection Template
                 </span>
                 <select
-                  className="w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-950 shadow-sm focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100"
+                  className={ux.input}
                   id={`plan-template-${row.key}`}
                   name="inspectionTemplateId"
                   onChange={(event) =>
@@ -244,7 +245,7 @@ export function BuildingInspectionPlanForm({
 
       <div className="flex flex-wrap items-center gap-3">
         <button
-          className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-900 shadow-sm hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-brand-100"
+          className={ux.mutedButton}
           onClick={() => setRows((current) => [...current, newPlanRow()])}
           type="button"
         >
@@ -252,7 +253,7 @@ export function BuildingInspectionPlanForm({
         </button>
 
         <button
-          className="rounded-xl bg-brand-700 px-5 py-3 text-sm font-semibold text-white shadow-sm hover:bg-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100 disabled:cursor-not-allowed disabled:opacity-60"
+          className={ux.primaryButton}
           disabled={isPending}
           type="submit"
         >
@@ -261,7 +262,7 @@ export function BuildingInspectionPlanForm({
       </div>
 
       {state.status === "success" ? (
-        <p className="rounded-xl border border-brand-100 bg-brand-50 px-4 py-3 text-sm font-medium text-brand-700">
+        <p className={ux.successMessage}>
           {state.message}
         </p>
       ) : null}

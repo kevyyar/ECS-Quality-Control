@@ -3,6 +3,7 @@
 import { useActionState, useState } from "react";
 
 import type { InspectionTemplateSetupRecord } from "@/lib/client-building-setup/model";
+import { ux } from "@/lib/ux/tokens";
 
 import {
   createInspectionTemplateAction,
@@ -140,7 +141,7 @@ function InspectionTemplateForm({
       <label className="space-y-2" htmlFor={`${formId}-name`}>
         <span className="text-sm font-semibold text-slate-900">Template name</span>
         <input
-          className="w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-950 shadow-sm focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100"
+          className={ux.input}
           defaultValue={fieldValue(state, "name", template)}
           id={`${formId}-name`}
           name="name"
@@ -152,7 +153,7 @@ function InspectionTemplateForm({
       <label className="space-y-2" htmlFor={`${formId}-description`}>
         <span className="text-sm font-semibold text-slate-900">Description</span>
         <textarea
-          className="min-h-24 w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-950 shadow-sm focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100"
+          className={` min-h-24`}
           defaultValue={fieldValue(state, "description", template)}
           id={`${formId}-description`}
           name="description"
@@ -169,7 +170,7 @@ function InspectionTemplateForm({
             </p>
           </div>
           <button
-            className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-900 shadow-sm hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-brand-100"
+            className={ux.mutedButton}
             onClick={() => setItems((current) => [...current, newClientItem()])}
             type="button"
           >
@@ -190,7 +191,7 @@ function InspectionTemplateForm({
                 </legend>
                 <div className="flex flex-wrap gap-2">
                   <button
-                    className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-900 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    className={ux.compactButton}
                     disabled={index === 0}
                     onClick={() => moveItem(index, -1)}
                     type="button"
@@ -198,7 +199,7 @@ function InspectionTemplateForm({
                     Up
                   </button>
                   <button
-                    className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-900 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    className={ux.compactButton}
                     disabled={index === items.length - 1}
                     onClick={() => moveItem(index, 1)}
                     type="button"
@@ -206,7 +207,7 @@ function InspectionTemplateForm({
                     Down
                   </button>
                   <button
-                    className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-900 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    className={ux.compactButton}
                     disabled={items.length === 1}
                     onClick={() => removeItem(index)}
                     type="button"
@@ -219,7 +220,7 @@ function InspectionTemplateForm({
               <label className="space-y-2" htmlFor={`${formId}-item-name-${item.key}`}>
                 <span className="text-sm font-semibold text-slate-900">Item name</span>
                 <input
-                  className="w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-950 shadow-sm focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100"
+                  className={ux.input}
                   id={`${formId}-item-name-${item.key}`}
                   name="itemName"
                   onChange={(event) => updateItem(index, { name: event.target.value })}
@@ -232,7 +233,7 @@ function InspectionTemplateForm({
               <label className="space-y-2" htmlFor={`${formId}-item-description-${item.key}`}>
                 <span className="text-sm font-semibold text-slate-900">Item description</span>
                 <textarea
-                  className="min-h-20 w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-950 shadow-sm focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100"
+                  className={` min-h-20`}
                   id={`${formId}-item-description-${item.key}`}
                   name="itemDescription"
                   onChange={(event) =>
@@ -248,7 +249,7 @@ function InspectionTemplateForm({
                   Section name <span className="font-normal text-muted-ink">(optional)</span>
                 </span>
                 <input
-                  className="w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-950 shadow-sm focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100"
+                  className={ux.input}
                   id={`${formId}-item-section-${item.key}`}
                   name="itemSectionName"
                   onChange={(event) =>
@@ -264,13 +265,13 @@ function InspectionTemplateForm({
       </div>
 
       {state.status === "success" ? (
-        <p className="rounded-xl border border-brand-100 bg-brand-50 px-4 py-3 text-sm font-medium text-brand-700">
+        <p className={ux.successMessage}>
           {state.message}
         </p>
       ) : null}
 
       <button
-        className="rounded-xl bg-brand-700 px-5 py-3 text-sm font-semibold text-white shadow-sm hover:bg-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100 disabled:cursor-not-allowed disabled:opacity-60"
+        className={ux.primaryButton}
         disabled={isPending}
         type="submit"
       >

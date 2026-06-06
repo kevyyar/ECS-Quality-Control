@@ -2,6 +2,8 @@ import Link from "next/link";
 
 import { requireProtectedAction } from "@/lib/auth/session";
 import { listBuildingInspectionPlanSummaries } from "@/lib/client-building-setup/repository";
+import { SetupListPage } from "@/lib/ux/setup-list-page";
+import { ux } from "@/lib/ux/tokens";
 
 type BuildingInspectionPlansPageProps = {
   searchParams?: Promise<{ includeArchived?: string; q?: string }>;
@@ -45,28 +47,26 @@ export default async function BuildingInspectionPlansPage({
   });
 
   return (
-    <main className="min-h-screen bg-slate-50 px-6 py-10 text-ink sm:px-10">
-      <section className="mx-auto max-w-4xl space-y-8 rounded-card border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-        <div className="space-y-3">
-          <Link className="text-sm font-semibold text-brand-700" href="/setup">
-            ← Setup
-          </Link>
-          <div className="space-y-2">
-            <h1 className="text-3xl font-bold tracking-tight text-slate-950">
-              Building Inspection Plans
-            </h1>
-            <p className="text-muted-ink">
-              Assign active Areas and Inspection Templates used when starting future
-              Draft Inspections.
-            </p>
-          </div>
-        </div>
-
-        <form className="flex flex-col gap-3 rounded-2xl border border-slate-200 p-5 sm:flex-row sm:items-end">
-          <label className="flex-1 space-y-2" htmlFor="plan-search">
-            <span className="text-sm font-semibold text-slate-900">Search Buildings by name</span>
+    <SetupListPage
+      description="Assign active Areas and Inspection Templates used when starting future Draft Inspections."
+      emptyDescription="Search for a Building or include archived records to see more results."
+      emptyTitle="No Buildings found"
+      listHeading={includeArchived ? "All Buildings" : "Active Buildings"}
+      listHeadingId="building-inspection-plans-list-heading"
+      records={summaries.map((summary) => ({
+        id: summary.buildingId,
+        href: `/setup/building-inspection-plans/${summary.buildingId}`,
+        title: summary.buildingName,
+        meta: summary.clientName,
+        subtitle: planStatus(summary),
+        actionLabel: "Manage",
+      }))}
+      searchForm={
+        <form className="flex flex-col gap-4 sm:flex-row sm:items-end">
+          <label className="flex-1 space-y-1.5" htmlFor="plan-search">
+            <span className={ux.fieldLabel}>Building name</span>
             <input
-              className="w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-950 shadow-sm focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100"
+              className={ux.input}
               defaultValue={params?.q ?? ""}
               id="plan-search"
               name="q"
@@ -74,55 +74,31 @@ export default async function BuildingInspectionPlansPage({
             />
           </label>
           {includeArchived ? <input name="includeArchived" type="hidden" value="1" /> : null}
-          <button className="rounded-xl bg-brand-700 px-5 py-3 text-sm font-semibold text-white shadow-sm hover:bg-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100" type="submit">Search</button>
-          <Link className="py-3 text-sm font-semibold text-brand-700" href={includeArchived ? "/setup/building-inspection-plans?includeArchived=1" : "/setup/building-inspection-plans"}>Clear</Link>
-        </form>
-
-        <div className="space-y-4">
-          <div className="flex items-center justify-between gap-4">
-            <h2 className="text-xl font-semibold text-slate-950">
-              {includeArchived ? "All Buildings" : "Active Buildings"}
-            </h2>
+          <div className="flex flex-wrap items-end gap-3">
+            <button className={ux.primaryButton} type="submit">
+              Search
+            </button>
             <Link
-              className="text-sm font-semibold text-brand-700"
+              className={`${ux.textLink} py-2.5`}
               href={
                 includeArchived
-                  ? "/setup/building-inspection-plans"
-                  : "/setup/building-inspection-plans?includeArchived=1"
+                  ? "/setup/building-inspection-plans?includeArchived=1"
+                  : "/setup/building-inspection-plans"
               }
             >
-              {includeArchived ? "Show active only" : "Include archived"}
+              Clear
             </Link>
           </div>
-
-          {summaries.length === 0 ? (
-            <p className="rounded-2xl border border-slate-200 p-5 text-sm text-muted-ink">
-              No Buildings found.
-            </p>
-          ) : (
-            <ul className="divide-y divide-slate-200 rounded-2xl border border-slate-200">
-              {summaries.map((summary) => (
-                <li key={summary.buildingId}>
-                  <Link
-                    className="flex items-center justify-between gap-4 p-5 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-brand-100"
-                    href={`/setup/building-inspection-plans/${summary.buildingId}`}
-                  >
-                    <span>
-                      <span className="block font-semibold text-slate-950">
-                        {summary.buildingName}
-                      </span>
-                      <span className="mt-1 block text-sm text-muted-ink">
-                        {summary.clientName} · {planStatus(summary)}
-                      </span>
-                    </span>
-                    <span className="text-sm font-semibold text-brand-700">Manage</span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </section>
-    </main>
+        </form>
+      }
+      title="Building Inspection"
+      titleAccent="Plans"
+      toggleHref={
+        includeArchived
+          ? "/setup/building-inspection-plans"
+          : "/setup/building-inspection-plans?includeArchived=1"
+      }
+      toggleLabel={includeArchived ? "Show active only" : "Include archived"}
+    />
   );
 }

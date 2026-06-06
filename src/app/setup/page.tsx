@@ -6,6 +6,15 @@ import {
   listBuildings,
   listClients,
 } from "@/lib/client-building-setup/repository";
+import {
+  AppPage,
+  AppPageBody,
+  AppPageHero,
+  PageSection,
+  SetupNavCard,
+} from "@/lib/ux/app-page";
+import { Glyph } from "@/lib/ux/glyph";
+import { ux } from "@/lib/ux/tokens";
 
 type SetupPageProps = {
   searchParams?: Promise<{ q?: string }>;
@@ -25,165 +34,149 @@ export default async function SetupPage({ searchParams }: SetupPageProps) {
     : [[], [], []];
 
   return (
-    <main className="min-h-screen bg-slate-50 px-6 py-10 text-ink sm:px-10">
-      <section className="mx-auto max-w-3xl space-y-6 rounded-card border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-        <div className="space-y-2">
-          <h1 className="text-3xl font-bold tracking-tight text-slate-950">
-            Setup management
-          </h1>
-          <p className="text-muted-ink">
-            Manage shared setup records for the Janitorial Company.
-          </p>
-        </div>
+    <AppPage>
+      <AppPageHero
+        backHref="/dashboard"
+        backLabel="Dashboard"
+        description="Manage shared setup records for the Janitorial Company."
+        eyebrow="Configuration"
+        title="Setup"
+        titleAccent="management"
+      />
 
-        <form className="flex flex-col gap-3 rounded-2xl border border-slate-200 p-5 sm:flex-row sm:items-end">
-          <label className="flex-1 space-y-2" htmlFor="setup-search">
-            <span className="text-sm font-semibold text-slate-900">
-              Search Clients, Buildings, and Areas by name
-            </span>
-            <input
-              className="w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-950 shadow-sm focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100"
-              defaultValue={search}
-              id="setup-search"
-              name="q"
-              placeholder="Client, Building, or Area name"
-              type="search"
-            />
-          </label>
-          <button
-            className="rounded-xl bg-brand-700 px-5 py-3 text-sm font-semibold text-white shadow-sm hover:bg-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100"
-            type="submit"
-          >
-            Search
-          </button>
-          <Link className="py-3 text-sm font-semibold text-brand-700" href="/setup">
-            Clear
-          </Link>
-        </form>
+      <AppPageBody>
+        <PageSection heading="Search setup records" headingId="setup-search-heading" icon="search">
+          <form className="flex flex-col gap-4 sm:flex-row sm:items-end">
+            <label className="flex-1 space-y-1.5" htmlFor="setup-search">
+              <span className={ux.fieldLabel}>Name</span>
+              <input
+                className={ux.input}
+                defaultValue={search}
+                id="setup-search"
+                name="q"
+                placeholder="Client, Building, or Area name"
+                type="search"
+              />
+            </label>
+            <div className="flex flex-wrap items-end gap-3">
+              <button className={ux.primaryButton} type="submit">
+                Search
+              </button>
+              <Link className={`${ux.textLink} py-2.5`} href="/setup">
+                Clear
+              </Link>
+            </div>
+          </form>
+        </PageSection>
 
         {search ? (
-          <section className="space-y-4 rounded-2xl border border-slate-200 p-5" aria-labelledby="setup-search-results-heading">
-            <h2 id="setup-search-results-heading" className="text-xl font-semibold text-slate-950">
-              Setup search results
-            </h2>
-            <div className="grid gap-4 md:grid-cols-3">
-              <div className="space-y-2">
-                <h3 className="font-semibold text-slate-950">Clients</h3>
-                {clients.length === 0 ? <p className="text-sm text-muted-ink">No Clients found.</p> : null}
-                <ul className="space-y-2">
-                  {clients.map((client) => (
-                    <li key={client.id}>
-                      <Link className="text-sm font-semibold text-brand-700" href={`/setup/clients/${client.id}`}>
-                        {client.name}
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
+          <PageSection
+            heading="Search results"
+            headingId="setup-search-results-heading"
+            icon="list"
+          >
+            <div className="grid gap-6 md:grid-cols-3">
+              <div className="space-y-3">
+                <h3 className="font-display text-sm font-bold text-slate-900">Clients</h3>
+                {clients.length === 0 ? (
+                  <p className="text-sm text-muted-ink">No Clients found.</p>
+                ) : (
+                  <ul className="space-y-2">
+                    {clients.map((client) => (
+                      <li key={client.id}>
+                        <Link className={ux.textLink} href={`/setup/clients/${client.id}`}>
+                          {client.name}
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
-              <div className="space-y-2">
-                <h3 className="font-semibold text-slate-950">Buildings</h3>
-                {buildings.length === 0 ? <p className="text-sm text-muted-ink">No Buildings found.</p> : null}
-                <ul className="space-y-2">
-                  {buildings.map((building) => (
-                    <li key={building.id}>
-                      <Link className="text-sm font-semibold text-brand-700" href={`/setup/buildings/${building.id}`}>
-                        {building.name}
-                      </Link>
-                      <p className="text-xs text-muted-ink">{building.clientName}</p>
-                    </li>
-                  ))}
-                </ul>
+              <div className="space-y-3">
+                <h3 className="font-display text-sm font-bold text-slate-900">Buildings</h3>
+                {buildings.length === 0 ? (
+                  <p className="text-sm text-muted-ink">No Buildings found.</p>
+                ) : (
+                  <ul className="space-y-2">
+                    {buildings.map((building) => (
+                      <li key={building.id}>
+                        <Link className={ux.textLink} href={`/setup/buildings/${building.id}`}>
+                          {building.name}
+                        </Link>
+                        <p className="text-xs text-muted-ink">{building.clientName}</p>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
-              <div className="space-y-2">
-                <h3 className="font-semibold text-slate-950">Areas</h3>
-                {areas.length === 0 ? <p className="text-sm text-muted-ink">No Areas found.</p> : null}
-                <ul className="space-y-2">
-                  {areas.map((area) => (
-                    <li key={area.id}>
-                      <Link className="text-sm font-semibold text-brand-700" href={`/setup/areas/${area.id}`}>
-                        {area.name}
-                      </Link>
-                      <p className="text-xs text-muted-ink">{area.clientName} · {area.buildingName}</p>
-                    </li>
-                  ))}
-                </ul>
+              <div className="space-y-3">
+                <h3 className="font-display text-sm font-bold text-slate-900">Areas</h3>
+                {areas.length === 0 ? (
+                  <p className="text-sm text-muted-ink">No Areas found.</p>
+                ) : (
+                  <ul className="space-y-2">
+                    {areas.map((area) => (
+                      <li key={area.id}>
+                        <Link className={ux.textLink} href={`/setup/areas/${area.id}`}>
+                          {area.name}
+                        </Link>
+                        <p className="text-xs text-muted-ink">
+                          {area.clientName} · {area.buildingName}
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
             </div>
-          </section>
+          </PageSection>
         ) : null}
 
-        <div className="grid gap-4">
-          <Link
-            className="block rounded-2xl border border-brand-100 bg-brand-50/70 p-5 text-brand-700 transition hover:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100"
-            href="/setup/clients"
-          >
-            <span className="block text-lg font-semibold">Clients</span>
-            <span className="mt-2 block text-sm">
-              Create, edit, archive, and restore service customers.
-            </span>
-          </Link>
+        <PageSection heading="Setup areas" headingId="setup-areas-heading" icon="settings">
+          <div className="grid gap-4">
+            <SetupNavCard
+              description="Create, edit, archive, and restore service customers."
+              href="/setup/clients"
+              title="Clients"
+            />
+            <SetupNavCard
+              description="Manage service locations under active Clients."
+              href="/setup/buildings"
+              title="Buildings"
+            />
+            <SetupNavCard
+              description="Manage reusable Area categories used to organize Areas."
+              href="/setup/area-types"
+              title="Area Types"
+            />
+            <SetupNavCard
+              description="Manage inspectable spaces under active Buildings."
+              href="/setup/areas"
+              title="Areas"
+            />
+            <SetupNavCard
+              description="Manage reusable inspection checklists and starter templates."
+              href="/setup/inspection-templates"
+              title="Inspection Templates"
+            />
+            <SetupNavCard
+              description="Assign active Areas and Inspection Templates used when starting future Draft Inspections."
+              href="/setup/building-inspection-plans"
+              title="Building Inspection Plans"
+            />
+            <SetupNavCard
+              description="Configure the shared identity used by the app and future PDF reports."
+              href="/company-branding"
+              title="Company Branding"
+            />
+          </div>
+        </PageSection>
 
-          <Link
-            className="block rounded-2xl border border-brand-100 bg-brand-50/70 p-5 text-brand-700 transition hover:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100"
-            href="/setup/buildings"
-          >
-            <span className="block text-lg font-semibold">Buildings</span>
-            <span className="mt-2 block text-sm">
-              Manage service locations under active Clients.
-            </span>
-          </Link>
-
-          <Link
-            className="block rounded-2xl border border-brand-100 bg-brand-50/70 p-5 text-brand-700 transition hover:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100"
-            href="/setup/area-types"
-          >
-            <span className="block text-lg font-semibold">Area Types</span>
-            <span className="mt-2 block text-sm">
-              Manage reusable Area categories used to organize Areas.
-            </span>
-          </Link>
-
-          <Link
-            className="block rounded-2xl border border-brand-100 bg-brand-50/70 p-5 text-brand-700 transition hover:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100"
-            href="/setup/areas"
-          >
-            <span className="block text-lg font-semibold">Areas</span>
-            <span className="mt-2 block text-sm">
-              Manage inspectable spaces under active Buildings.
-            </span>
-          </Link>
-
-          <Link
-            className="block rounded-2xl border border-brand-100 bg-brand-50/70 p-5 text-brand-700 transition hover:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100"
-            href="/setup/inspection-templates"
-          >
-            <span className="block text-lg font-semibold">Inspection Templates</span>
-            <span className="mt-2 block text-sm">
-              Manage reusable inspection checklists and starter templates.
-            </span>
-          </Link>
-
-          <Link
-            className="block rounded-2xl border border-brand-100 bg-brand-50/70 p-5 text-brand-700 transition hover:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100"
-            href="/setup/building-inspection-plans"
-          >
-            <span className="block text-lg font-semibold">Building Inspection Plans</span>
-            <span className="mt-2 block text-sm">
-              Assign active Areas and Inspection Templates used when starting future Draft Inspections.
-            </span>
-          </Link>
-
-          <Link
-            className="block rounded-2xl border border-brand-100 bg-brand-50/70 p-5 text-brand-700 transition hover:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100"
-            href="/company-branding"
-          >
-            <span className="block text-lg font-semibold">Company Branding</span>
-            <span className="mt-2 block text-sm">
-              Configure the shared identity used by the app and future PDF reports.
-            </span>
-          </Link>
-        </div>
-      </section>
-    </main>
+        <footer className="pt-2 text-center text-xs text-muted-ink">
+          <Glyph className="mr-1 inline size-3 text-brand-forest-600" name="settings" />
+          Setup records stay available for historical inspections and reports when archived.
+        </footer>
+      </AppPageBody>
+    </AppPage>
   );
 }

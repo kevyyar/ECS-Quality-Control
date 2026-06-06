@@ -6,6 +6,16 @@ import {
   getAreaType,
   listAreas,
 } from "@/lib/client-building-setup/repository";
+import {
+  PageEmptyState,
+  RecordList,
+  RecordListItem,
+} from "@/lib/ux/app-page";
+import {
+  SetupDetailPage,
+  SetupDetailSection,
+} from "@/lib/ux/setup-detail-page";
+import { ux } from "@/lib/ux/tokens";
 
 import { archiveAreaTypeAction, restoreAreaTypeAction } from "../actions";
 import { AreaTypeEditForm } from "../area-type-form";
@@ -50,70 +60,55 @@ export default async function AreaTypeDetailPage({ params }: AreaTypeDetailPageP
   });
 
   return (
-    <main className="min-h-screen bg-slate-50 px-6 py-10 text-ink sm:px-10">
-      <section className="mx-auto max-w-4xl space-y-8 rounded-card border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-        <div className="space-y-3">
-          <Link className="text-sm font-semibold text-brand-700" href="/setup/area-types">
-            ← Area Types
-          </Link>
-          <div className="space-y-2">
-            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-brand-700">
-              {areaType.isArchived ? "Archived Area Type" : "Active Area Type"}
-            </p>
-            <h1 className="text-3xl font-bold tracking-tight text-slate-950">
-              {areaType.name}
-            </h1>
-          </div>
-        </div>
-
+    <SetupDetailPage
+      backHref="/setup/area-types"
+      backLabel="Area Types"
+      eyebrow={areaType.isArchived ? "Archived Area Type" : "Active Area Type"}
+      title={areaType.name}
+    >
+      <SetupDetailSection heading="Edit Area Type" headingId="area-type-edit-heading" icon="settings">
         <AreaTypeEditForm areaType={areaType} />
+      </SetupDetailSection>
 
+      <SetupDetailSection heading="Archive status" headingId="area-type-archive-heading" icon="shield">
         <form action={areaType.isArchived ? restoreAreaTypeAction : archiveAreaTypeAction}>
           <input name="id" type="hidden" value={areaType.id} />
-          <button
-            className="rounded-xl border border-slate-300 px-5 py-3 text-sm font-semibold text-slate-900 shadow-sm hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-brand-100"
-            type="submit"
-          >
+          <button className={ux.mutedButton} type="submit">
             {areaType.isArchived ? "Restore Area Type" : "Archive Area Type"}
           </button>
         </form>
+      </SetupDetailSection>
 
-        <div className="space-y-4">
-          <div className="flex items-center justify-between gap-4">
-            <h2 className="text-xl font-semibold text-slate-950">Areas</h2>
-            <Link className="text-sm font-semibold text-brand-700" href="/setup/areas">
-              Manage Areas
-            </Link>
-          </div>
-
-          {areas.length === 0 ? (
-            <p className="rounded-2xl border border-slate-200 p-5 text-sm text-muted-ink">
-              No Areas use this Area Type.
-            </p>
-          ) : (
-            <ul className="divide-y divide-slate-200 rounded-2xl border border-slate-200">
-              {areas.map((area) => (
-                <li key={area.id}>
-                  <Link
-                    className="flex items-center justify-between gap-4 p-5 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-brand-100"
-                    href={`/setup/areas/${area.id}`}
-                  >
-                    <span>
-                      <span className="block font-semibold text-slate-950">
-                        {area.name}
-                      </span>
-                      <span className="mt-1 block text-sm text-muted-ink">
-                        {area.clientName} · {area.buildingName} · {areaStatus(area)}
-                      </span>
-                    </span>
-                    <span className="text-sm font-semibold text-brand-700">View</span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </section>
-    </main>
+      <SetupDetailSection
+        headerAside={
+          <Link className={ux.textLink} href="/setup/areas">
+            Manage Areas
+          </Link>
+        }
+        heading="Areas"
+        headingId="area-type-areas-heading"
+        icon="list"
+      >
+        {areas.length === 0 ? (
+          <PageEmptyState
+            description="Areas using this type will appear here once they are created."
+            icon="list"
+            title="No Areas use this type"
+          />
+        ) : (
+          <RecordList label="Areas">
+            {areas.map((area) => (
+              <RecordListItem
+                href={`/setup/areas/${area.id}`}
+                key={area.id}
+                meta={area.clientName}
+                subtitle={`${area.buildingName} · ${areaStatus(area)}`}
+                title={area.name}
+              />
+            ))}
+          </RecordList>
+        )}
+      </SetupDetailSection>
+    </SetupDetailPage>
   );
 }

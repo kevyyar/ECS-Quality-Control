@@ -8,6 +8,14 @@ import { requireInternalUser } from "@/lib/auth/session";
 import { listCorrectionNotes } from "@/lib/correction-notes/repository";
 import { createEvidencePhotoUrl } from "@/lib/evidence/storage";
 import { getTicket } from "@/lib/tickets/repository";
+import {
+  AppPage,
+  AppPageBody,
+  AppPageHero,
+  PageSection,
+} from "@/lib/ux/app-page";
+import { Glyph } from "@/lib/ux/glyph";
+import { ux } from "@/lib/ux/tokens";
 
 type TicketDetailPageProps = {
   params: Promise<{ ticketId: string }>;
@@ -47,9 +55,9 @@ function PhotoGrid({
   }
 
   return (
-    <ul className="grid gap-3 sm:grid-cols-2" aria-label={label}>
+    <ul aria-label={label} className="grid gap-3 sm:grid-cols-2">
       {photos.map((photo, index) => (
-        <li key={photo.id} className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+        <li className="overflow-hidden rounded-xl border border-slate-200/80 bg-slate-50" key={photo.id}>
           {photo.url ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -88,88 +96,81 @@ export default async function TicketDetailPage({ params }: TicketDetailPageProps
   ]);
 
   return (
-    <main className="min-h-screen bg-slate-50 px-6 py-10 text-ink sm:px-10">
-      <section className="mx-auto max-w-4xl space-y-8 rounded-card border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-        <div className="space-y-3">
-          <Link className="text-sm font-semibold text-brand-700" href="/tickets">
-            ← Tickets
-          </Link>
-          <div className="space-y-2">
-            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-brand-700">
-              {ticket.displayNumber} · {ticket.status === "closed" ? "Closed" : "Open"}
-            </p>
-            <h1 className="text-3xl font-bold tracking-tight text-slate-950">
-              {ticket.title}
-            </h1>
-            <p className="text-muted-ink">
-              {ticket.clientName} · {ticket.buildingName} · {ticket.areaName}
-            </p>
-          </div>
-        </div>
+    <AppPage>
+      <AppPageHero
+        backHref="/tickets"
+        backLabel="Tickets"
+        badge={
+          <p className="inline-flex items-center gap-2 rounded-full border border-brand-emerald-400/25 bg-brand-emerald-500/10 px-3 py-1 text-[0.7rem] font-semibold uppercase tracking-[0.22em] text-brand-emerald-200 backdrop-blur-sm">
+            <Glyph className="size-3.5 text-brand-emerald-300" name="ticket" />
+            {ticket.displayNumber} · {ticket.status === "closed" ? "Closed" : "Open"}
+          </p>
+        }
+        description={`${ticket.clientName} · ${ticket.buildingName} · ${ticket.areaName}`}
+        eyebrow="Ticket detail"
+        title={ticket.title}
+      />
 
-        <section className="space-y-3 rounded-2xl border border-slate-200 p-5" aria-labelledby="ticket-failure-heading">
-          <h2 id="ticket-failure-heading" className="text-xl font-semibold text-slate-950">
-            Failure proof
-          </h2>
-          <p className="text-sm text-slate-700">Failed item: {ticket.failedItemName}</p>
-          {ticket.failedItemDescription ? (
-            <p className="text-sm text-muted-ink">{ticket.failedItemDescription}</p>
-          ) : null}
-          {ticket.issueNote ? (
-            <p className="text-sm text-slate-700">Issue: {ticket.issueNote}</p>
-          ) : null}
-          <PhotoGrid label="Before Photos" photos={beforePhotos} />
-        </section>
+      <AppPageBody overlap="detail">
+        <PageSection heading="Failure proof" headingId="ticket-failure-heading" icon="document">
+          <div className="space-y-3">
+            <p className="text-sm text-slate-700">Failed item: {ticket.failedItemName}</p>
+            {ticket.failedItemDescription ? (
+              <p className="text-sm text-muted-ink">{ticket.failedItemDescription}</p>
+            ) : null}
+            {ticket.issueNote ? (
+              <p className="text-sm text-slate-700">Issue: {ticket.issueNote}</p>
+            ) : null}
+            <PhotoGrid label="Before Photos" photos={beforePhotos} />
+          </div>
+        </PageSection>
 
         {ticket.status === "open" ? (
           canCloseTicket ? (
-            <Link
-              className="inline-flex rounded-xl bg-brand-700 px-5 py-3 text-sm font-semibold text-white shadow-sm hover:bg-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100"
-              href={`/tickets/${ticket.id}/close`}
-            >
+            <Link className={ux.primaryButton} href={`/tickets/${ticket.id}/close`}>
               Close Ticket
             </Link>
           ) : null
         ) : (
           <>
-            <div className="space-y-2">
+            <PageSection heading="Closure proof" headingId="ticket-closure-heading" icon="check">
+              <div className="space-y-3">
+                {ticket.resolutionNote ? (
+                  <p className="text-sm text-slate-700">Resolution: {ticket.resolutionNote}</p>
+                ) : null}
+                <p className="text-sm text-muted-ink">
+                  Closed by {ticket.closedByEmail ?? "Unknown"} · {formatDateTime(ticket.closedAt)}
+                </p>
+                <PhotoGrid label="After Photos" photos={afterPhotos} />
+              </div>
+            </PageSection>
+
+            <PageSection heading="Resolution report" headingId="ticket-report-heading" icon="download">
               <Link
                 aria-describedby="ticket-resolution-report-download-help"
-                className="inline-flex rounded-xl bg-brand-700 px-5 py-3 text-sm font-semibold text-white shadow-sm hover:bg-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100"
+                className={`${ux.primaryButton} gap-2`}
                 href={`/tickets/${ticket.id}/resolution-report`}
               >
+                <Glyph className="size-4" name="download" />
                 Download Ticket Resolution Report PDF
               </Link>
-              <p id="ticket-resolution-report-download-help" className="text-sm text-muted-ink">
-                Opens a PDF download for this Closed Ticket. If the download fails,
-                retry after refreshing or ask a Supervisor to check production logs.
+              <p className="mt-3 text-sm text-muted-ink" id="ticket-resolution-report-download-help">
+                Opens a PDF download for this Closed Ticket. If the download fails, retry after
+                refreshing or ask a Supervisor to check production logs.
               </p>
-            </div>
-            <section className="space-y-3 rounded-2xl border border-slate-200 p-5" aria-labelledby="ticket-closure-heading">
-              <h2 id="ticket-closure-heading" className="text-xl font-semibold text-slate-950">
-                Closure proof
-              </h2>
-              {ticket.resolutionNote ? (
-                <p className="text-sm text-slate-700">Resolution: {ticket.resolutionNote}</p>
-              ) : null}
-              <p className="text-sm text-muted-ink">
-                Closed by {ticket.closedByEmail ?? "Unknown"} · {formatDateTime(ticket.closedAt)}
-              </p>
-              <PhotoGrid label="After Photos" photos={afterPhotos} />
-            </section>
+            </PageSection>
           </>
         )}
 
-        <section className="space-y-4" aria-labelledby="ticket-correction-notes-heading">
-          <h2 id="ticket-correction-notes-heading" className="text-xl font-semibold text-slate-950">
-            Correction Notes
-          </h2>
-          <CorrectionNoteList notes={notes} />
-          {canAddCorrectionNote ? (
-            <CorrectionNoteForm targetId={ticket.id} targetType="ticket" />
-          ) : null}
-        </section>
-      </section>
-    </main>
+        <PageSection heading="Correction Notes" headingId="ticket-correction-notes-heading" icon="note">
+          <div className="space-y-4">
+            <CorrectionNoteList notes={notes} />
+            {canAddCorrectionNote ? (
+              <CorrectionNoteForm targetId={ticket.id} targetType="ticket" />
+            ) : null}
+          </div>
+        </PageSection>
+      </AppPageBody>
+    </AppPage>
   );
 }

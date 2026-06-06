@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 
 import type { ClientSetupRecord } from "@/lib/client-building-setup/model";
+import { ux } from "@/lib/ux/tokens";
 
 import {
   createClientAction,
@@ -42,11 +43,11 @@ export function ClientCreateForm() {
   );
 
   return (
-    <form action={formAction} className="space-y-4 rounded-2xl border border-slate-200 p-5">
-      <label className="space-y-2" htmlFor="client-name">
-        <span className="text-sm font-semibold text-slate-900">Client name</span>
+    <form action={formAction} className="space-y-4">
+      <label className="space-y-1.5" htmlFor="client-name">
+        <span className={ux.fieldLabel}>Client name</span>
         <input
-          className="w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-950 shadow-sm focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100"
+          className={ux.input}
           defaultValue={clientNameValue(state)}
           id="client-name"
           name="name"
@@ -56,13 +57,13 @@ export function ClientCreateForm() {
       </label>
 
       {state.status === "success" ? (
-        <p className="rounded-xl border border-brand-100 bg-brand-50 px-4 py-3 text-sm font-medium text-brand-700">
+        <p className={ux.successMessage}>
           {state.message}
         </p>
       ) : null}
 
       <button
-        className="rounded-xl bg-brand-700 px-5 py-3 text-sm font-semibold text-white shadow-sm hover:bg-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100 disabled:cursor-not-allowed disabled:opacity-60"
+        className={ux.primaryButton}
         disabled={isPending}
         type="submit"
       >
@@ -79,12 +80,12 @@ export function ClientEditForm({ client }: { client: ClientSetupRecord }) {
   );
 
   return (
-    <form action={formAction} className="space-y-4 rounded-2xl border border-slate-200 p-5">
+    <form action={formAction} className="space-y-4">
       <input name="id" type="hidden" value={client.id} />
-      <label className="space-y-2" htmlFor="client-name">
-        <span className="text-sm font-semibold text-slate-900">Client name</span>
+      <label className="space-y-1.5" htmlFor="client-name">
+        <span className={ux.fieldLabel}>Client name</span>
         <input
-          className="w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-950 shadow-sm focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100"
+          className={ux.input}
           defaultValue={clientNameValue(state, client)}
           id="client-name"
           name="name"
@@ -94,13 +95,13 @@ export function ClientEditForm({ client }: { client: ClientSetupRecord }) {
       </label>
 
       {state.status === "success" ? (
-        <p className="rounded-xl border border-brand-100 bg-brand-50 px-4 py-3 text-sm font-medium text-brand-700">
+        <p className={ux.successMessage}>
           {state.message}
         </p>
       ) : null}
 
       <button
-        className="rounded-xl bg-brand-700 px-5 py-3 text-sm font-semibold text-white shadow-sm hover:bg-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100 disabled:cursor-not-allowed disabled:opacity-60"
+        className={ux.primaryButton}
         disabled={isPending}
         type="submit"
       >

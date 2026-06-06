@@ -3,6 +3,16 @@ import Link from "next/link";
 import { canPerformProtectedAction } from "@/lib/auth/capabilities";
 import { requireInternalUser } from "@/lib/auth/session";
 import { listOpenTickets } from "@/lib/tickets/repository";
+import {
+  AppPage,
+  AppPageBody,
+  AppPageHero,
+  PageEmptyState,
+  PageSection,
+  RecordList,
+} from "@/lib/ux/app-page";
+import { Glyph } from "@/lib/ux/glyph";
+import { ux } from "@/lib/ux/tokens";
 
 type TicketsPageProps = {
   searchParams?: Promise<{
@@ -56,10 +66,10 @@ function FilterSelect({
   value: string | undefined;
 }) {
   return (
-    <label className="space-y-2" htmlFor={`ticket-filter-${name}`}>
-      <span className="text-sm font-semibold text-slate-900">{label}</span>
+    <label className="space-y-1.5" htmlFor={`ticket-filter-${name}`}>
+      <span className={ux.fieldLabel}>{label}</span>
       <select
-        className="w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-950 shadow-sm focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100"
+        className={ux.select}
         defaultValue={value ?? ""}
         id={`ticket-filter-${name}`}
         name={name}
@@ -90,121 +100,141 @@ export default async function TicketsPage({ searchParams }: TicketsPageProps) {
     }),
   ]);
 
+  const hasActiveFilters = Boolean(
+    params?.clientId || params?.buildingId || params?.areaId || params?.q,
+  );
+
   return (
-    <main className="min-h-screen bg-slate-50 px-6 py-10 text-ink sm:px-10">
-      <section className="mx-auto max-w-5xl space-y-8 rounded-card border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-        <div className="space-y-3">
-          <Link className="text-sm font-semibold text-brand-700" href="/">
-            ← Home
-          </Link>
-          <div className="space-y-2">
-            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-brand-700">
-              Tickets
-            </p>
-            <h1 className="text-3xl font-bold tracking-tight text-slate-950">
-              Open Tickets
-            </h1>
-            <p className="text-muted-ink">
-              Review unresolved quality issues. Supervisors can close Tickets with
-              resolution notes and After Photos.
-            </p>
-          </div>
-        </div>
+    <AppPage>
+      <AppPageHero
+        backHref="/dashboard"
+        backLabel="Dashboard"
+        description="Review unresolved quality issues. Supervisors can close Tickets with resolution notes and After Photos."
+        eyebrow="Corrective Actions"
+        title="Open"
+        titleAccent="Tickets"
+      />
 
-        <form className="grid gap-4 rounded-2xl border border-slate-200 p-5 md:grid-cols-5">
-          <label className="space-y-2 md:col-span-2" htmlFor="ticket-search">
-            <span className="text-sm font-semibold text-slate-900">Search Tickets</span>
-            <input
-              className="w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-950 shadow-sm focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100"
-              defaultValue={params?.q ?? ""}
-              id="ticket-search"
-              name="q"
-              placeholder="T-000001 or restroom mirror"
-              type="search"
+      <AppPageBody>
+        <PageSection heading="Filters" headingId="ticket-filters-heading" icon="filter">
+          <form className="grid gap-4 lg:grid-cols-5">
+            <label className="space-y-1.5 lg:col-span-2" htmlFor="ticket-search">
+              <span className={ux.fieldLabel}>Search</span>
+              <input
+                className={ux.input}
+                defaultValue={params?.q ?? ""}
+                id="ticket-search"
+                name="q"
+                placeholder="T-000001 or restroom mirror"
+                type="search"
+              />
+            </label>
+            <FilterSelect
+              label="Clients"
+              name="clientId"
+              options={uniqueOptions(allOpenTickets, "client")}
+              value={params?.clientId}
             />
-          </label>
-          <FilterSelect
-            label="Clients"
-            name="clientId"
-            options={uniqueOptions(allOpenTickets, "client")}
-            value={params?.clientId}
-          />
-          <FilterSelect
-            label="Buildings"
-            name="buildingId"
-            options={uniqueOptions(allOpenTickets, "building")}
-            value={params?.buildingId}
-          />
-          <FilterSelect
-            label="Areas"
-            name="areaId"
-            options={uniqueOptions(allOpenTickets, "area")}
-            value={params?.areaId}
-          />
-          <div className="flex flex-wrap items-end gap-3 md:col-span-5">
-            <button
-              className="rounded-xl bg-brand-700 px-5 py-3 text-sm font-semibold text-white shadow-sm hover:bg-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100"
-              type="submit"
-            >
-              Apply filters
-            </button>
-            <Link className="py-3 text-sm font-semibold text-brand-700" href="/tickets">
-              Clear
-            </Link>
-          </div>
-        </form>
+            <FilterSelect
+              label="Buildings"
+              name="buildingId"
+              options={uniqueOptions(allOpenTickets, "building")}
+              value={params?.buildingId}
+            />
+            <FilterSelect
+              label="Areas"
+              name="areaId"
+              options={uniqueOptions(allOpenTickets, "area")}
+              value={params?.areaId}
+            />
+            <div className="flex flex-wrap items-end gap-3 lg:col-span-5">
+              <button className={ux.primaryButton} type="submit">
+                Apply filters
+              </button>
+              <Link className={`${ux.textLink} py-2.5`} href="/tickets">
+                Clear
+              </Link>
+            </div>
+          </form>
+        </PageSection>
 
-        {openTickets.length === 0 ? (
-          <p className="rounded-2xl border border-slate-200 p-5 text-sm text-muted-ink">
-            No Open Tickets found.
-          </p>
-        ) : (
-          <ul className="space-y-4" aria-label="Open Tickets">
-            {openTickets.map((ticket) => (
-              <li key={ticket.id} className="rounded-2xl border border-slate-200 p-5">
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                  <div className="space-y-2">
-                    <p className="text-sm font-semibold text-brand-700">
-                      {ticket.displayNumber}
-                    </p>
-                    <h2 className="text-xl font-semibold text-slate-950">
-                      {ticket.title}
-                    </h2>
-                    <p className="text-sm text-muted-ink">
-                      {ticket.clientName} · {ticket.buildingName} · {ticket.areaName}
-                    </p>
-                    <p className="text-sm text-slate-700">
-                      Failed item: {ticket.failedItemName}
-                    </p>
-                    {ticket.issueNote ? (
-                      <p className="text-sm text-slate-700">Issue: {ticket.issueNote}</p>
-                    ) : null}
-                    <p className="text-xs text-muted-ink">
-                      Created {formatDateTime(ticket.createdAt)} · Before Photos: {ticket.beforePhotos.length}
-                    </p>
-                  </div>
-                  <div className="flex flex-col gap-2 sm:items-end">
-                    <Link
-                      className="rounded-xl border border-brand-700 px-4 py-2 text-center text-sm font-semibold text-brand-700 shadow-sm hover:bg-brand-50 focus:outline-none focus:ring-2 focus:ring-brand-100"
-                      href={`/tickets/${ticket.id}`}
-                    >
-                      View / Add Notes
-                    </Link>
-                    {canCloseTickets ? (
-                      <Link
-                        className="rounded-xl bg-brand-700 px-4 py-2 text-center text-sm font-semibold text-white shadow-sm hover:bg-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100"
-                        href={`/tickets/${ticket.id}/close`}
-                      >
-                        Close Ticket
+        <PageSection
+          headerAside={
+            <p className="text-xs text-muted-ink">
+              {openTickets.length} {openTickets.length === 1 ? "result" : "results"}
+            </p>
+          }
+          heading="Open Tickets"
+          headingId="ticket-results-heading"
+          icon="ticket"
+        >
+          {openTickets.length === 0 ? (
+            <PageEmptyState
+              action={
+                hasActiveFilters ? (
+                  <Link className={ux.secondaryButton} href="/tickets">
+                    Clear filters
+                  </Link>
+                ) : undefined
+              }
+              description={
+                hasActiveFilters
+                  ? "Try adjusting your filters or clearing them to see more results."
+                  : "Tickets are created automatically when inspection items fail."
+              }
+              icon="ticket"
+              title="No Open Tickets found"
+            />
+          ) : (
+            <RecordList label="Open Tickets">
+              {openTickets.map((ticket) => (
+                <li key={ticket.id}>
+                  <article className={ux.recordCard}>
+                    <div className="min-w-0 space-y-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-brand-forest-700">
+                          {ticket.displayNumber}
+                        </p>
+                      </div>
+                      <h2 className="font-display text-base font-bold text-slate-950">
+                        {ticket.title}
+                      </h2>
+                      <p className="text-sm text-muted-ink">
+                        {ticket.clientName} · {ticket.buildingName} · {ticket.areaName}
+                      </p>
+                      <p className="text-sm text-slate-700">
+                        Failed item: {ticket.failedItemName}
+                      </p>
+                      {ticket.issueNote ? (
+                        <p className="text-sm text-slate-700">Issue: {ticket.issueNote}</p>
+                      ) : null}
+                      <p className="text-xs text-muted-ink">
+                        Created {formatDateTime(ticket.createdAt)} · Before Photos:{" "}
+                        {ticket.beforePhotos.length}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 flex-col gap-2 sm:items-end">
+                      <Link className={ux.secondaryButton} href={`/tickets/${ticket.id}`}>
+                        View / Add Notes
                       </Link>
-                    ) : null}
-                  </div>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-    </main>
+                      {canCloseTickets ? (
+                        <Link className={ux.primaryButton} href={`/tickets/${ticket.id}/close`}>
+                          Close Ticket
+                        </Link>
+                      ) : null}
+                    </div>
+                  </article>
+                </li>
+              ))}
+            </RecordList>
+          )}
+        </PageSection>
+
+        <footer className="pt-2 text-center text-xs text-muted-ink">
+          <Glyph className="mr-1 inline size-3 text-brand-forest-600" name="ticket" />
+          Open Tickets stay visible until a Supervisor closes them with proof.
+        </footer>
+      </AppPageBody>
+    </AppPage>
   );
 }

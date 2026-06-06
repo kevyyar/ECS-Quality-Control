@@ -6,6 +6,7 @@ import type {
   BuildingSetupRecord,
   ClientSetupRecord,
 } from "@/lib/client-building-setup/model";
+import { ux } from "@/lib/ux/tokens";
 
 import {
   createBuildingAction,
@@ -68,7 +69,7 @@ export function BuildingCreateForm({
       <label className="space-y-2" htmlFor="building-client-id">
         <span className="text-sm font-semibold text-slate-900">Client</span>
         <select
-          className="w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-950 shadow-sm focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100"
+          className={ux.input}
           defaultValue={selectedClientValue(state)}
           id="building-client-id"
           name="clientId"
@@ -87,7 +88,7 @@ export function BuildingCreateForm({
       <label className="space-y-2" htmlFor="building-name">
         <span className="text-sm font-semibold text-slate-900">Building name</span>
         <input
-          className="w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-950 shadow-sm focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100"
+          className={ux.input}
           defaultValue={buildingNameValue(state)}
           id="building-name"
           name="name"
@@ -97,13 +98,13 @@ export function BuildingCreateForm({
       </label>
 
       {state.status === "success" ? (
-        <p className="rounded-xl border border-brand-100 bg-brand-50 px-4 py-3 text-sm font-medium text-brand-700">
+        <p className={ux.successMessage}>
           {state.message}
         </p>
       ) : null}
 
       <button
-        className="rounded-xl bg-brand-700 px-5 py-3 text-sm font-semibold text-white shadow-sm hover:bg-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100 disabled:cursor-not-allowed disabled:opacity-60"
+        className={ux.primaryButton}
         disabled={isPending}
         type="submit"
       >
@@ -125,7 +126,7 @@ export function BuildingEditForm({ building }: { building: BuildingSetupRecord }
       <label className="space-y-2" htmlFor="building-name">
         <span className="text-sm font-semibold text-slate-900">Building name</span>
         <input
-          className="w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-950 shadow-sm focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100"
+          className={ux.input}
           defaultValue={buildingNameValue(state, building)}
           id="building-name"
           name="name"
@@ -135,13 +136,13 @@ export function BuildingEditForm({ building }: { building: BuildingSetupRecord }
       </label>
 
       {state.status === "success" ? (
-        <p className="rounded-xl border border-brand-100 bg-brand-50 px-4 py-3 text-sm font-medium text-brand-700">
+        <p className={ux.successMessage}>
           {state.message}
         </p>
       ) : null}
 
       <button
-        className="rounded-xl bg-brand-700 px-5 py-3 text-sm font-semibold text-white shadow-sm hover:bg-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100 disabled:cursor-not-allowed disabled:opacity-60"
+        className={ux.primaryButton}
         disabled={isPending}
         type="submit"
       >

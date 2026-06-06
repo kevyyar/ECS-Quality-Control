@@ -1,13 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useState, type ReactNode } from "react";
 
 import type {
   DraftAreaInspectionRecord,
   DraftInspectionItemRecord,
   DraftSubmissionReviewSummary,
   DraftSubmissionValidation,
+  InspectionItemResultStatus,
 } from "@/lib/inspections/drafts/model";
 
 import {
@@ -102,6 +103,165 @@ function FieldError({ message }: { message: string | undefined }) {
   }
 
   return <p className="text-sm font-medium text-red-700">{message}</p>;
+}
+
+type DraftProgress = {
+  answered: number;
+  total: number;
+  percent: number;
+};
+
+function computeItemProgress(items: DraftEditorItem[]): DraftProgress {
+  const answered = items.filter((item) => item.resultStatus !== null).length;
+
+  return {
+    answered,
+    total: items.length,
+    percent: items.length > 0 ? Math.round((answered / items.length) * 100) : 0,
+  };
+}
+
+function computeDraftProgress(draft: DraftEditorDraft): DraftProgress {
+  const items = draft.areaInspections.flatMap((area) =>
+    area.isSkipped ? [] : area.items,
+  );
+
+  return computeItemProgress(items);
+}
+
+function resultStatusLabel(resultStatus: InspectionItemResultStatus | null): string {
+  switch (resultStatus) {
+    case "pass":
+      return "Pass";
+    case "fail":
+      return "Fail";
+    case "not_applicable":
+      return "N/A";
+    case null:
+      return "Unanswered";
+    default: {
+      const unreachable: never = resultStatus;
+      return unreachable;
+    }
+  }
+}
+
+function itemAccordionSurfaceClass(resultStatus: InspectionItemResultStatus | null): string {
+  switch (resultStatus) {
+    case "pass":
+      return "bg-brand-emerald-50/40";
+    case "fail":
+      return "bg-red-50/40";
+    case "not_applicable":
+      return "bg-slate-50";
+    case null:
+      return "bg-white";
+    default: {
+      const unreachable: never = resultStatus;
+      return unreachable;
+    }
+  }
+}
+
+function ItemResultStatusBadge({
+  resultStatus,
+}: {
+  resultStatus: InspectionItemResultStatus | null;
+}) {
+  const label = resultStatusLabel(resultStatus);
+
+  const className = (() => {
+    switch (resultStatus) {
+      case "pass":
+        return "border-brand-emerald-200 bg-brand-emerald-50 text-brand-emerald-800";
+      case "fail":
+        return "border-red-200 bg-red-50 text-red-800";
+      case "not_applicable":
+        return "border-slate-200 bg-slate-100 text-slate-700";
+      case null:
+        return "border-dashed border-slate-300 bg-white text-slate-500";
+      default: {
+        const unreachable: never = resultStatus;
+        return unreachable;
+      }
+    }
+  })();
+
+  return (
+    <span
+      className={`inline-flex shrink-0 items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold uppercase tracking-[0.12em] ${className}`}
+    >
+      {label}
+    </span>
+  );
+}
+
+function ChevronIcon({ expanded }: { expanded: boolean }) {
+  return (
+    <svg
+      aria-hidden="true"
+      className={`size-4 shrink-0 text-slate-500 transition-transform duration-200 ${expanded ? "rotate-180" : ""}`}
+      fill="none"
+      viewBox="0 0 24 24"
+    >
+      <path
+        d="M6 9l6 6 6-6"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2"
+      />
+    </svg>
+  );
+}
+
+function ProgressTracker({
+  answered,
+  total,
+  percent,
+  compact = false,
+}: DraftProgress & { compact?: boolean }) {
+  return (
+    <div className={compact ? "space-y-1" : "space-y-1.5"}>
+      <div className="flex items-center justify-between gap-3 text-xs">
+        <span className="font-medium text-slate-600">
+          {answered} of {total} items answered
+        </span>
+        <span className="font-display font-semibold tabular-nums text-slate-950">{percent}%</span>
+      </div>
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+        <div
+          className="h-full rounded-full bg-gradient-to-r from-brand-forest-700 to-brand-emerald-500 transition-all duration-300"
+          style={{ width: `${percent}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function DraftProgressSummary({ draft }: { draft: DraftEditorDraft }) {
+  const progress = computeDraftProgress(draft);
+
+  if (progress.total === 0) {
+    return null;
+  }
+
+  return (
+    <section
+      aria-labelledby="draft-progress-heading"
+      className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
+    >
+      <h2 className="text-sm font-semibold text-slate-950" id="draft-progress-heading">
+        Draft progress
+      </h2>
+      <p className="mt-1 text-sm text-muted-ink">
+        Collapse answered items to scan what still needs attention.
+      </p>
+      <div className="mt-3">
+        <ProgressTracker {...progress} />
+      </div>
+    </section>
+  );
 }
 
 function ActionMessage({
@@ -245,36 +405,73 @@ function SubmissionValidationSummary({
   );
 
   return (
-    <div className="space-y-2 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-900">
-      <p className="font-semibold">Fix these before submitting:</p>
-      <ul className="list-disc space-y-1 pl-5">
-        {validation.errors.inspection ? <li>{validation.errors.inspection}</li> : null}
-        {Object.entries(validation.errors.areaInspections ?? {}).flatMap(
-          ([areaInspectionId, messages]) => {
-            const area = areaById.get(areaInspectionId);
-            const label = area ? area.areaNameSnapshot : "Area Inspection";
-
-            return messages.map((message) => (
-              <li key={`${areaInspectionId}-${message}`}>
-                {label}: {message}
-              </li>
-            ));
-          },
-        )}
-        {Object.entries(validation.errors.items ?? {}).flatMap(([itemId, messages]) => {
-          const target = itemById.get(itemId);
-          const label = target
-            ? `${target.area.areaNameSnapshot} — ${target.item.itemNameSnapshot}`
-            : "Inspection item";
+    <ul className="space-y-1 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">
+      {validation.errors.inspection ? <li>{validation.errors.inspection}</li> : null}
+      {Object.entries(validation.errors.areaInspections ?? {}).flatMap(
+        ([areaInspectionId, messages]) => {
+          const area = areaById.get(areaInspectionId);
+          const label = area ? area.areaNameSnapshot : "Area";
 
           return messages.map((message) => (
-            <li key={`${itemId}-${message}`}>
-              {label}: {message}
+            <li key={`${areaInspectionId}-${message}`}>
+              <span className="font-medium">{label}:</span> {message}
             </li>
           ));
-        })}
-      </ul>
-    </div>
+        },
+      )}
+      {Object.entries(validation.errors.items ?? {}).flatMap(([itemId, messages]) => {
+        const target = itemById.get(itemId);
+        const label = target
+          ? `${target.area.areaNameSnapshot} — ${target.item.itemNameSnapshot}`
+          : "Item";
+
+        return messages.map((message) => (
+          <li key={`${itemId}-${message}`}>
+            <span className="font-medium">{label}:</span> {message}
+          </li>
+        ));
+      })}
+    </ul>
+  );
+}
+
+function ReviewSectionAccordion({
+  title,
+  count,
+  defaultOpen,
+  children,
+  emptyMessage,
+}: {
+  title: string;
+  count: number;
+  defaultOpen: boolean;
+  children: ReactNode;
+  emptyMessage: string;
+}) {
+  const [isOpen, setIsOpen] = useState(defaultOpen);
+  const panelId = `review-section-${title.toLowerCase().replace(/\s+/g, "-")}`;
+
+  return (
+    <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+      <button
+        aria-controls={panelId}
+        aria-expanded={isOpen}
+        className="flex w-full items-center gap-2 px-3 py-2.5 text-left"
+        onClick={() => setIsOpen((open) => !open)}
+        type="button"
+      >
+        <ChevronIcon expanded={isOpen} />
+        <span className="min-w-0 flex-1 text-sm font-semibold text-slate-950">{title}</span>
+        <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold tabular-nums text-slate-600">
+          {count}
+        </span>
+      </button>
+      {isOpen ? (
+        <div className="border-t border-slate-100 px-3 pb-3 pt-2 text-sm text-slate-700" id={panelId}>
+          {count === 0 ? <p className="text-muted-ink">{emptyMessage}</p> : children}
+        </div>
+      ) : null}
+    </section>
   );
 }
 
@@ -286,120 +483,109 @@ function SubmissionReviewPanel({
   draft: DraftEditorDraft;
 }) {
   const resultCounts = [
-    { label: "Pass", value: review.resultCounts.pass },
-    { label: "Fail", value: review.resultCounts.fail },
-    { label: "N/A", value: review.resultCounts.notApplicable },
-    { label: "Unanswered", value: review.resultCounts.unanswered },
+    { label: "Pass", value: review.resultCounts.pass, tone: "text-brand-emerald-700" },
+    { label: "Fail", value: review.resultCounts.fail, tone: "text-red-700" },
+    { label: "N/A", value: review.resultCounts.notApplicable, tone: "text-slate-600" },
+    {
+      label: "Open",
+      value: review.resultCounts.unanswered,
+      tone: review.resultCounts.unanswered > 0 ? "text-amber-700" : "text-slate-600",
+    },
   ];
 
   return (
-    <div className="space-y-5 rounded-2xl border border-slate-200 bg-slate-50 p-5">
-      <div>
-        <h3 className="text-lg font-semibold text-slate-950">Pre-submit review</h3>
-        <p className="mt-1 text-sm text-muted-ink">
-          Review what will become the Submitted Inspection. The server will validate again
-          when you submit.
-        </p>
-      </div>
-
-      <dl className="grid gap-3 sm:grid-cols-4">
+    <div className="space-y-3">
+      <dl className="grid grid-cols-2 gap-2">
         {resultCounts.map((count) => (
-          <div className="rounded-xl bg-white p-3" key={count.label}>
-            <dt className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+          <div
+            className="flex items-center justify-between gap-2 rounded-lg bg-white px-3 py-2"
+            key={count.label}
+          >
+            <dt className="text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-slate-500 sm:text-xs">
               {count.label}
             </dt>
-            <dd className="mt-1 text-2xl font-bold text-slate-950">{count.value}</dd>
+            <dd className={`text-lg font-bold tabular-nums sm:text-xl ${count.tone}`}>
+              {count.value}
+            </dd>
           </div>
         ))}
       </dl>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <section className="space-y-2 rounded-xl bg-white p-4" aria-labelledby="completed-areas-heading">
-          <h4 id="completed-areas-heading" className="font-semibold text-slate-950">
-            Completed Area Inspections included in submission
-          </h4>
-          {review.completedAreaInspections.length === 0 ? (
-            <p className="text-sm text-muted-ink">No completed Area Inspections yet.</p>
-          ) : (
-            <ul className="list-disc space-y-1 pl-5 text-sm text-slate-700">
-              {review.completedAreaInspections.map((area) => (
-                <li key={area.id}>
-                  {area.areaName} ({area.source === "one_off" ? "one-off" : "planned"})
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
+      <div className="space-y-2">
+        <ReviewSectionAccordion
+          count={review.completedAreaInspections.length}
+          defaultOpen={review.completedAreaInspections.length > 0}
+          emptyMessage="No completed areas yet."
+          title="Completed areas"
+        >
+          <ul className="space-y-1.5">
+            {review.completedAreaInspections.map((area) => (
+              <li className="flex flex-wrap items-baseline gap-x-1.5" key={area.id}>
+                <span className="font-medium text-slate-950">{area.areaName}</span>
+                <span className="text-xs text-muted-ink">
+                  {area.source === "one_off" ? "one-off" : "planned"}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </ReviewSectionAccordion>
 
-        <section className="space-y-2 rounded-xl bg-white p-4" aria-labelledby="skipped-areas-heading">
-          <h4 id="skipped-areas-heading" className="font-semibold text-slate-950">
-            Skipped Area Inspections
-          </h4>
-          {review.skippedAreaInspections.length === 0 ? (
-            <p className="text-sm text-muted-ink">No Area Inspections are skipped.</p>
-          ) : (
-            <ul className="space-y-2 text-sm text-slate-700">
-              {review.skippedAreaInspections.map((area) => (
-                <li key={area.id}>
-                  <span className="font-medium text-slate-950">{area.areaName}:</span>{" "}
+        <ReviewSectionAccordion
+          count={review.skippedAreaInspections.length}
+          defaultOpen={review.skippedAreaInspections.length > 0}
+          emptyMessage="No areas are skipped."
+          title="Skipped areas"
+        >
+          <ul className="space-y-2">
+            {review.skippedAreaInspections.map((area) => (
+              <li key={area.id}>
+                <span className="font-medium text-slate-950">{area.areaName}</span>
+                <p className="mt-0.5 text-muted-ink">
                   {area.skipReason || "Missing skip reason"}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </ReviewSectionAccordion>
+
+        {review.oneOffAreaInspections.length > 0 ? (
+          <ReviewSectionAccordion
+            count={review.oneOffAreaInspections.length}
+            defaultOpen={false}
+            emptyMessage="No one-off areas were added."
+            title="One-off areas"
+          >
+            <ul className="space-y-1.5">
+              {review.oneOffAreaInspections.map((area) => (
+                <li className="font-medium text-slate-950" key={area.id}>
+                  {area.areaName}
                 </li>
               ))}
             </ul>
-          )}
-        </section>
+          </ReviewSectionAccordion>
+        ) : null}
 
-        <section className="space-y-2 rounded-xl bg-white p-4" aria-labelledby="one-off-areas-heading">
-          <h4 id="one-off-areas-heading" className="font-semibold text-slate-950">
-            One-off Area Inspections
-          </h4>
-          {review.oneOffAreaInspections.length === 0 ? (
-            <p className="text-sm text-muted-ink">No one-off Area Inspections were added.</p>
-          ) : (
-            <ul className="list-disc space-y-1 pl-5 text-sm text-slate-700">
-              {review.oneOffAreaInspections.map((area) => (
-                <li key={area.id}>{area.areaName}</li>
-              ))}
-            </ul>
-          )}
-        </section>
-
-        <section className="space-y-2 rounded-xl bg-white p-4" aria-labelledby="tickets-heading">
-          <h4 id="tickets-heading" className="font-semibold text-slate-950">
-            Tickets that will be created after successful submission
-          </h4>
-          {review.ticketsToCreate.length === 0 ? (
-            <p className="text-sm text-muted-ink">No failed items are planned to create Tickets.</p>
-          ) : (
-            <ul className="list-disc space-y-1 pl-5 text-sm text-slate-700">
+        {review.ticketsToCreate.length > 0 ? (
+          <ReviewSectionAccordion
+            count={review.ticketsToCreate.length}
+            defaultOpen
+            emptyMessage="No tickets will be created."
+            title="Tickets to create"
+          >
+            <ul className="space-y-1.5">
               {review.ticketsToCreate.map((ticket) => (
-                <li key={ticket.inspectionItemId}>{ticket.title}</li>
+                <li className="font-medium text-slate-950" key={ticket.inspectionItemId}>
+                  {ticket.title}
+                </li>
               ))}
             </ul>
-          )}
-        </section>
+          </ReviewSectionAccordion>
+        ) : null}
       </div>
 
-      {review.hasSkippedPlannedAreaInspections ? (
-        <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-950">
-          Warning: planned Area Inspections are skipped. Submitting confirms those planned
-          areas were intentionally skipped for the reasons shown above, and no inspection
-          items or Tickets will be created for them.
-        </p>
+      {!review.validation.ok ? (
+        <SubmissionValidationSummary validation={review.validation} draft={draft} />
       ) : null}
-
-      <section className="space-y-2" aria-labelledby="validation-blockers-heading">
-        <h4 id="validation-blockers-heading" className="font-semibold text-slate-950">
-          Validation blockers
-        </h4>
-        {review.validation.ok ? (
-          <p className="rounded-xl border border-brand-100 bg-brand-50 px-4 py-3 text-sm font-medium text-brand-700">
-            No validation blockers detected. Final submit will run server validation again.
-          </p>
-        ) : (
-          <SubmissionValidationSummary validation={review.validation} draft={draft} />
-        )}
-      </section>
     </div>
   );
 }
@@ -407,9 +593,11 @@ function SubmissionReviewPanel({
 function ItemResultForm({
   inspectionId,
   item,
+  onSaved,
 }: {
   inspectionId: string;
   item: DraftEditorItem;
+  onSaved?: (resultStatus: InspectionItemResultStatus | null) => void;
 }) {
   const [resultStatus, setResultStatus] = useState(item.resultStatus ?? "");
   const [resultNote, setResultNote] = useState(item.resultNote ?? "");
@@ -419,6 +607,7 @@ function ItemResultForm({
   );
   const savedResultStatus =
     state.status === "success" ? state.values.resultStatus : item.resultStatus ?? "";
+  const isAnswered = item.resultStatus !== null;
   const beforePhotoItem = {
     ...item,
     resultStatus: savedResultStatus === ""
@@ -426,11 +615,23 @@ function ItemResultForm({
       : (savedResultStatus as DraftEditorItem["resultStatus"]),
   };
 
+  useEffect(() => {
+    if (state.status !== "success") {
+      return;
+    }
+
+    const nextStatus =
+      state.values.resultStatus === ""
+        ? null
+        : (state.values.resultStatus as InspectionItemResultStatus);
+    onSaved?.(nextStatus);
+  }, [onSaved, state]);
+
   return (
     <>
     <form
       action={formAction}
-      className="mt-4 space-y-3 rounded-xl border border-slate-200 bg-white p-4"
+      className="space-y-3 border-t border-slate-200 bg-white px-4 py-4"
       onReset={(event) => event.preventDefault()}
     >
       <input name="inspectionId" type="hidden" value={inspectionId} />
@@ -482,11 +683,97 @@ function ItemResultForm({
         disabled={isPending}
         type="submit"
       >
-        {isPending ? "Saving…" : "Save item result"}
+        {isPending ? "Saving…" : isAnswered ? "Update item result" : "Save item result"}
       </button>
     </form>
     <BeforePhotoControls inspectionId={inspectionId} item={beforePhotoItem} />
     </>
+  );
+}
+
+function DraftInspectionItemAccordion({
+  inspectionId,
+  item,
+}: {
+  inspectionId: string;
+  item: DraftEditorItem;
+}) {
+  const [isOpen, setIsOpen] = useState(item.resultStatus === null);
+  const [optimisticStatus, setOptimisticStatus] = useState<DraftEditorItem["resultStatus"] | undefined>(
+    undefined,
+  );
+  const [prevResultStatus, setPrevResultStatus] = useState(item.resultStatus);
+
+  if (item.resultStatus !== prevResultStatus) {
+    setPrevResultStatus(item.resultStatus);
+    setOptimisticStatus(undefined);
+  }
+
+  const displayStatus = optimisticStatus ?? item.resultStatus;
+  const panelId = `draft-item-panel-${item.id}`;
+  const buttonId = `draft-item-button-${item.id}`;
+
+  return (
+    <li
+      className={`overflow-hidden rounded-xl border border-slate-200 ${itemAccordionSurfaceClass(displayStatus)}`}
+    >
+      <button
+        aria-controls={panelId}
+        aria-expanded={isOpen}
+        className="flex w-full items-start gap-3 px-4 py-3 text-left transition hover:bg-white/70"
+        id={buttonId}
+        onClick={() => setIsOpen((open) => !open)}
+        type="button"
+      >
+        <ChevronIcon expanded={isOpen} />
+        <span className="min-w-0 flex-1 space-y-1">
+          <span className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-semibold text-slate-950">
+              {item.position}. {item.itemNameSnapshot}
+            </span>
+            <ItemResultStatusBadge resultStatus={displayStatus} />
+          </span>
+          {item.sectionNameSnapshot ? (
+            <span className="block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+              {item.sectionNameSnapshot}
+            </span>
+          ) : null}
+          {!isOpen && item.itemDescriptionSnapshot ? (
+            <span className="block text-sm text-muted-ink">{item.itemDescriptionSnapshot}</span>
+          ) : null}
+          {!isOpen && item.resultNote?.trim() ? (
+            <span className="block truncate text-sm text-slate-700">
+              Note: {item.resultNote.trim()}
+            </span>
+          ) : null}
+          {!isOpen && displayStatus === "fail" ? (
+            <span className="block text-xs font-medium text-amber-800">
+              {item.beforePhotos.length > 0
+                ? `${item.beforePhotos.length} before photo${item.beforePhotos.length === 1 ? "" : "s"} attached`
+                : "Before photo required before submit"}
+            </span>
+          ) : null}
+        </span>
+      </button>
+
+      {isOpen ? (
+        <div aria-labelledby={buttonId} id={panelId} role="region">
+          {item.itemDescriptionSnapshot ? (
+            <p className="border-t border-slate-200/80 px-4 py-3 text-sm text-muted-ink">
+              {item.itemDescriptionSnapshot}
+            </p>
+          ) : null}
+          <ItemResultForm
+            inspectionId={inspectionId}
+            item={item}
+            onSaved={(resultStatus) => {
+              setOptimisticStatus(resultStatus);
+              setIsOpen(false);
+            }}
+          />
+        </div>
+      ) : null}
+    </li>
   );
 }
 
@@ -561,54 +848,108 @@ function AreaSkipControls({ areaInspection }: { areaInspection: DraftEditorAreaI
   );
 }
 
-function AreaInspectionCard({ areaInspection }: { areaInspection: DraftEditorAreaInspection }) {
+function AreaInspectionAccordion({
+  areaInspection,
+}: {
+  areaInspection: DraftEditorAreaInspection;
+}) {
+  const progress = computeItemProgress(areaInspection.items);
+  const hasUnansweredItems = areaInspection.items.some((item) => item.resultStatus === null);
+  const [isOpen, setIsOpen] = useState(
+    areaInspection.isSkipped ? false : hasUnansweredItems || areaInspection.items.length === 0,
+  );
+  const panelId = `draft-area-panel-${areaInspection.id}`;
+  const buttonId = `draft-area-button-${areaInspection.id}`;
+  const areaAccentClass = areaInspection.isSkipped
+    ? "border-l-amber-400 bg-amber-50/30"
+    : progress.total > 0 && progress.answered === progress.total
+      ? "border-l-brand-emerald-500 bg-brand-emerald-50/20"
+      : "border-l-brand-forest-400 bg-white";
+
   return (
-    <li className="rounded-2xl border border-slate-200 p-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="space-y-1">
-          <h3 className="font-semibold text-slate-950">
-            {areaInspection.position}. {areaInspection.areaNameSnapshot}
-          </h3>
-          <p className="text-sm text-muted-ink">
-            {areaInspection.areaTypeNameSnapshot} · {areaInspection.inspectionTemplateNameSnapshot}
-          </p>
+    <li
+      className={`overflow-hidden rounded-2xl border border-slate-200 border-l-4 ${areaAccentClass}`}
+    >
+      <button
+        aria-controls={panelId}
+        aria-expanded={isOpen}
+        className="flex w-full items-start gap-3 p-5 text-left transition hover:bg-white/60"
+        id={buttonId}
+        onClick={() => setIsOpen((open) => !open)}
+        type="button"
+      >
+        <ChevronIcon expanded={isOpen} />
+        <span className="min-w-0 flex-1 space-y-3">
+          <span className="flex flex-wrap items-start justify-between gap-3">
+            <span className="space-y-1">
+              <span className="flex flex-wrap items-center gap-2">
+                <span className="font-semibold text-slate-950">
+                  {areaInspection.position}. {areaInspection.areaNameSnapshot}
+                </span>
+                {areaInspection.isSkipped ? (
+                  <span className="inline-flex rounded-full border border-amber-200 bg-amber-100 px-2.5 py-0.5 text-xs font-semibold uppercase tracking-[0.12em] text-amber-900">
+                    Skipped
+                  </span>
+                ) : progress.total > 0 && progress.answered === progress.total ? (
+                  <span className="inline-flex rounded-full border border-brand-emerald-200 bg-brand-emerald-50 px-2.5 py-0.5 text-xs font-semibold uppercase tracking-[0.12em] text-brand-emerald-800">
+                    Complete
+                  </span>
+                ) : null}
+              </span>
+              <span className="block text-sm text-muted-ink">
+                {areaInspection.areaTypeNameSnapshot} ·{" "}
+                {areaInspection.inspectionTemplateNameSnapshot}
+              </span>
+            </span>
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-slate-600">
+              {areaInspection.source === "one_off" ? "One-off" : "Planned"}
+            </span>
+          </span>
+
+          {!areaInspection.isSkipped && progress.total > 0 ? (
+            <ProgressTracker {...progress} compact />
+          ) : null}
+
+          {!isOpen && areaInspection.inspectionTemplateDescriptionSnapshot ? (
+            <span className="block text-sm text-muted-ink">
+              {areaInspection.inspectionTemplateDescriptionSnapshot}
+            </span>
+          ) : null}
+          {!isOpen && areaInspection.isSkipped && areaInspection.skipReason ? (
+            <span className="block text-sm text-amber-950">
+              Skip reason: {areaInspection.skipReason}
+            </span>
+          ) : null}
+        </span>
+      </button>
+
+      {isOpen ? (
+        <div aria-labelledby={buttonId} className="border-t border-slate-200 px-5 pb-5" id={panelId} role="region">
           {areaInspection.inspectionTemplateDescriptionSnapshot ? (
-            <p className="text-sm text-muted-ink">
+            <p className="pt-4 text-sm text-muted-ink">
               {areaInspection.inspectionTemplateDescriptionSnapshot}
             </p>
           ) : null}
+
+          <AreaSkipControls areaInspection={areaInspection} />
+
+          {areaInspection.isSkipped ? null : areaInspection.items.length === 0 ? (
+            <p className="mt-4 rounded-xl bg-slate-50 px-4 py-3 text-sm text-muted-ink">
+              No inspection items captured for this Area Inspection.
+            </p>
+          ) : (
+            <ol className="mt-4 space-y-3">
+              {areaInspection.items.map((item) => (
+                <DraftInspectionItemAccordion
+                  inspectionId={areaInspection.inspectionId}
+                  item={item}
+                  key={item.id}
+                />
+              ))}
+            </ol>
+          )}
         </div>
-        <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-slate-600">
-          {areaInspection.source === "one_off" ? "One-off" : "Planned"}
-        </span>
-      </div>
-
-      <AreaSkipControls areaInspection={areaInspection} />
-
-      {areaInspection.isSkipped ? null : areaInspection.items.length === 0 ? (
-        <p className="mt-4 rounded-xl bg-slate-50 px-4 py-3 text-sm text-muted-ink">
-          No inspection items captured for this Area Inspection.
-        </p>
-      ) : (
-        <ol className="mt-4 space-y-4">
-          {areaInspection.items.map((item) => (
-            <li className="rounded-xl bg-slate-50 px-4 py-3" key={item.id}>
-              <div className="text-sm font-semibold text-slate-950">
-                {item.position}. {item.itemNameSnapshot}
-              </div>
-              {item.sectionNameSnapshot ? (
-                <div className="mt-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                  {item.sectionNameSnapshot}
-                </div>
-              ) : null}
-              {item.itemDescriptionSnapshot ? (
-                <p className="mt-1 text-sm text-muted-ink">{item.itemDescriptionSnapshot}</p>
-              ) : null}
-              <ItemResultForm inspectionId={areaInspection.inspectionId} item={item} />
-            </li>
-          ))}
-        </ol>
-      )}
+      ) : null}
     </li>
   );
 }
@@ -719,64 +1060,47 @@ function SubmitDraftInspectionForm({
     !hasValidationBlockers &&
     (!requiresSkippedAreaConfirmation || skippedAreaSubmissionConfirmed);
 
+  const showSubmitValidationErrors =
+    state.status === "error" &&
+    state.validation &&
+    !state.validation.ok &&
+    submissionReview.validation.ok;
+
   return (
-    <form action={formAction} className="space-y-4 rounded-2xl border border-slate-200 p-5">
+    <form action={formAction} className="space-y-4 rounded-2xl border border-slate-200 p-4 sm:p-5">
       <input name="inspectionId" type="hidden" value={draft.id} />
-      <div>
-        <h2 className="text-xl font-semibold text-slate-950">Submit Draft Inspection</h2>
-        <p className="mt-1 text-sm text-muted-ink">
-          Submit only after reviewing the summary. Failed items need an issue note and at
-          least one Before Photo.
-        </p>
-      </div>
+      <h2 className="text-lg font-semibold text-slate-950 sm:text-xl">Submit draft</h2>
       <SubmissionReviewPanel draft={draft} review={submissionReview} />
-      {state.status === "error" ? (
+      {showSubmitValidationErrors ? (
+        <SubmissionValidationSummary validation={state.validation} draft={draft} />
+      ) : null}
+      {state.status === "error" ? <FieldError message={state.errors.inspectionId} /> : null}
+      {state.status === "success" ? (
         <>
-          <FieldError message={state.errors.inspectionId} />
-          <SubmissionValidationSummary validation={state.validation} draft={draft} />
+          <ActionMessage state={state} />
+          <Link className="text-sm font-semibold text-brand-700 underline" href="/inspections/drafts">
+            Back to drafts
+          </Link>
         </>
       ) : null}
-      <ActionMessage state={state} />
-      {state.status === "success" ? (
-        <Link className="text-sm font-semibold text-brand-700 underline" href="/inspections/drafts">
-          Back to active Draft Inspections
-        </Link>
-      ) : null}
       {requiresSkippedAreaConfirmation ? (
-        <label className="flex gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-950">
+        <label className="flex items-start gap-2.5 text-sm text-slate-700">
           <input
             checked={skippedAreaSubmissionConfirmed}
-            className="mt-1 h-4 w-4 rounded border-amber-400 text-brand-700 focus:ring-brand-100"
+            className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 text-brand-700 focus:ring-brand-100"
             name="confirmSkippedPlannedAreas"
             onChange={(event) => setSkippedAreaSubmissionConfirmed(event.target.checked)}
             type="checkbox"
           />
-          <span>
-            I confirm the skipped planned Area Inspections and reasons above are correct.
-            I understand skipped planned areas will not create inspection items or Tickets.
-          </span>
+          <span>Confirm skipped areas and reasons above</span>
         </label>
       ) : null}
-      {hasValidationBlockers ? (
-        <p className="text-sm font-medium text-red-700">
-          Resolve the validation blockers above before submitting.
-        </p>
-      ) : null}
-      {requiresSkippedAreaConfirmation && !skippedAreaSubmissionConfirmed ? (
-        <p className="text-sm font-medium text-amber-900">
-          Confirm the skipped planned Area Inspections before final submit.
-        </p>
-      ) : null}
       <button
-        className="rounded-xl bg-brand-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100 disabled:cursor-not-allowed disabled:opacity-60"
+        className="w-full rounded-xl bg-brand-700 px-4 py-3 text-sm font-semibold text-white shadow-sm hover:bg-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100 disabled:cursor-not-allowed disabled:opacity-60"
         disabled={!canSubmit}
         type="submit"
       >
-        {isPending
-          ? "Submitting…"
-          : submissionReview.hasSkippedPlannedAreaInspections
-            ? "Submit and confirm skipped planned areas"
-            : "Submit Draft Inspection"}
+        {isPending ? "Submitting…" : "Submit draft"}
       </button>
     </form>
   );
@@ -789,11 +1113,11 @@ function DiscardDraftInspectionForm({ inspectionId }: { inspectionId: string }) 
   );
 
   return (
-    <form action={formAction} className="space-y-3 rounded-2xl border border-red-200 bg-red-50 p-5">
+    <form action={formAction} className="space-y-3 rounded-2xl border border-red-200 bg-red-50 p-4 sm:p-5">
       <input name="inspectionId" type="hidden" value={inspectionId} />
-      <h2 className="text-xl font-semibold text-red-950">Discard Draft Inspection</h2>
-      <p className="text-sm text-red-900">
-        Discarding deletes this Draft and its item results. No report history or Tickets are created.
+      <h2 className="text-lg font-semibold text-red-950 sm:text-xl">Discard Draft</h2>
+      <p className="text-xs text-red-900 sm:text-sm">
+        Deletes this draft and all item results. No reports or tickets are created.
       </p>
       {state.status === "error" ? <FieldError message={state.errors.inspectionId} /> : null}
       <ActionMessage state={state} />
@@ -803,11 +1127,11 @@ function DiscardDraftInspectionForm({ inspectionId }: { inspectionId: string }) 
         </Link>
       ) : null}
       <button
-        className="rounded-xl bg-red-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-100 disabled:cursor-not-allowed disabled:opacity-60"
+        className="w-full rounded-xl bg-red-700 px-4 py-3 text-sm font-semibold text-white shadow-sm hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-100 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
         disabled={isPending}
         type="submit"
       >
-        {isPending ? "Discarding…" : "Discard Draft Inspection"}
+        {isPending ? "Discarding…" : "Discard Draft"}
       </button>
     </form>
   );
@@ -825,6 +1149,8 @@ export function DraftInspectionEditor({
         Draft data is editable work in progress and is not reportable until submitted.
       </p>
 
+      <DraftProgressSummary draft={draft} />
+
       <section className="space-y-4" aria-labelledby="area-inspections-heading">
         <h2 id="area-inspections-heading" className="text-xl font-semibold text-slate-950">
           Area Inspections
@@ -837,7 +1163,7 @@ export function DraftInspectionEditor({
         ) : (
           <ol className="space-y-4">
             {draft.areaInspections.map((areaInspection) => (
-              <AreaInspectionCard areaInspection={areaInspection} key={areaInspection.id} />
+              <AreaInspectionAccordion areaInspection={areaInspection} key={areaInspection.id} />
             ))}
           </ol>
         )}
@@ -849,10 +1175,13 @@ export function DraftInspectionEditor({
         draftId={draft.id}
       />
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <section aria-labelledby="draft-actions-heading" className="space-y-3">
+        <h2 className="text-lg font-semibold text-slate-950 sm:text-xl" id="draft-actions-heading">
+          Finish draft
+        </h2>
         <SubmitDraftInspectionForm draft={draft} submissionReview={submissionReview} />
         <DiscardDraftInspectionForm inspectionId={draft.id} />
-      </div>
+      </section>
     </div>
   );
 }

@@ -2,6 +2,8 @@ import Link from "next/link";
 
 import { requireProtectedAction } from "@/lib/auth/session";
 import { listClients } from "@/lib/client-building-setup/repository";
+import { SetupListPage } from "@/lib/ux/setup-list-page";
+import { ux } from "@/lib/ux/tokens";
 
 import { ClientCreateForm } from "./client-form";
 
@@ -24,30 +26,25 @@ export default async function ClientsPage({ searchParams }: ClientsPageProps) {
   });
 
   return (
-    <main className="min-h-screen bg-slate-50 px-6 py-10 text-ink sm:px-10">
-      <section className="mx-auto max-w-4xl space-y-8 rounded-card border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-        <div className="space-y-3">
-          <Link className="text-sm font-semibold text-brand-700" href="/setup">
-            ← Setup
-          </Link>
-          <div className="space-y-2">
-            <h1 className="text-3xl font-bold tracking-tight text-slate-950">
-              Clients
-            </h1>
-            <p className="text-muted-ink">
-              Manage service customers. Archive Clients instead of deleting them
-              so historical inspection context remains intact.
-            </p>
-          </div>
-        </div>
-
-        <ClientCreateForm />
-
-        <form className="flex flex-col gap-3 rounded-2xl border border-slate-200 p-5 sm:flex-row sm:items-end">
-          <label className="flex-1 space-y-2" htmlFor="client-search">
-            <span className="text-sm font-semibold text-slate-900">Search Clients by name</span>
+    <SetupListPage
+      createForm={<ClientCreateForm />}
+      description="Manage service customers. Archive Clients instead of deleting them so historical inspection context remains intact."
+      emptyDescription="Create a Client or adjust your search to see more results."
+      emptyTitle="No Clients found"
+      listHeading={includeArchived ? "All Clients" : "Active Clients"}
+      listHeadingId="clients-list-heading"
+      records={clients.map((client) => ({
+        id: client.id,
+        href: `/setup/clients/${client.id}`,
+        title: client.name,
+        subtitle: statusLabel(client.isArchived),
+      }))}
+      searchForm={
+        <form className="flex flex-col gap-4 sm:flex-row sm:items-end">
+          <label className="flex-1 space-y-1.5" htmlFor="client-search">
+            <span className={ux.fieldLabel}>Client name</span>
             <input
-              className="w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-950 shadow-sm focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100"
+              className={ux.input}
               defaultValue={params?.q ?? ""}
               id="client-search"
               name="q"
@@ -55,51 +52,22 @@ export default async function ClientsPage({ searchParams }: ClientsPageProps) {
             />
           </label>
           {includeArchived ? <input name="includeArchived" type="hidden" value="1" /> : null}
-          <button className="rounded-xl bg-brand-700 px-5 py-3 text-sm font-semibold text-white shadow-sm hover:bg-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100" type="submit">Search</button>
-          <Link className="py-3 text-sm font-semibold text-brand-700" href={includeArchived ? "/setup/clients?includeArchived=1" : "/setup/clients"}>Clear</Link>
-        </form>
-
-        <div className="space-y-4">
-          <div className="flex items-center justify-between gap-4">
-            <h2 className="text-xl font-semibold text-slate-950">
-              {includeArchived ? "All Clients" : "Active Clients"}
-            </h2>
+          <div className="flex flex-wrap items-end gap-3">
+            <button className={ux.primaryButton} type="submit">
+              Search
+            </button>
             <Link
-              className="text-sm font-semibold text-brand-700"
-              href={includeArchived ? "/setup/clients" : "/setup/clients?includeArchived=1"}
+              className={`${ux.textLink} py-2.5`}
+              href={includeArchived ? "/setup/clients?includeArchived=1" : "/setup/clients"}
             >
-              {includeArchived ? "Show active only" : "Include archived"}
+              Clear
             </Link>
           </div>
-
-          {clients.length === 0 ? (
-            <p className="rounded-2xl border border-slate-200 p-5 text-sm text-muted-ink">
-              No Clients found.
-            </p>
-          ) : (
-            <ul className="divide-y divide-slate-200 rounded-2xl border border-slate-200">
-              {clients.map((client) => (
-                <li key={client.id}>
-                  <Link
-                    className="flex items-center justify-between gap-4 p-5 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-brand-100"
-                    href={`/setup/clients/${client.id}`}
-                  >
-                    <span>
-                      <span className="block font-semibold text-slate-950">
-                        {client.name}
-                      </span>
-                      <span className="mt-1 block text-sm text-muted-ink">
-                        {statusLabel(client.isArchived)}
-                      </span>
-                    </span>
-                    <span className="text-sm font-semibold text-brand-700">View</span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </section>
-    </main>
+        </form>
+      }
+      title="Clients"
+      toggleHref={includeArchived ? "/setup/clients" : "/setup/clients?includeArchived=1"}
+      toggleLabel={includeArchived ? "Show active only" : "Include archived"}
+    />
   );
 }

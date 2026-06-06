@@ -6,6 +6,8 @@ import {
   listAreaTypes,
   listBuildings,
 } from "@/lib/client-building-setup/repository";
+import { SetupListPage } from "@/lib/ux/setup-list-page";
+import { ux } from "@/lib/ux/tokens";
 
 import { AreaCreateForm } from "./area-form";
 
@@ -45,30 +47,28 @@ export default async function AreasPage({ searchParams }: AreasPageProps) {
   ]);
 
   return (
-    <main className="min-h-screen bg-slate-50 px-6 py-10 text-ink sm:px-10">
-      <section className="mx-auto max-w-4xl space-y-8 rounded-card border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-        <div className="space-y-3">
-          <Link className="text-sm font-semibold text-brand-700" href="/setup">
-            ← Setup
-          </Link>
-          <div className="space-y-2">
-            <h1 className="text-3xl font-bold tracking-tight text-slate-950">
-              Areas
-            </h1>
-            <p className="text-muted-ink">
-              Manage inspectable spaces under active Buildings and Area Types.
-              Archived parents hide Areas from active lookup lists.
-            </p>
-          </div>
-        </div>
-
-        <AreaCreateForm activeBuildings={activeBuildings} activeAreaTypes={activeAreaTypes} />
-
-        <form className="flex flex-col gap-3 rounded-2xl border border-slate-200 p-5 sm:flex-row sm:items-end">
-          <label className="flex-1 space-y-2" htmlFor="area-search">
-            <span className="text-sm font-semibold text-slate-900">Search Areas by name</span>
+    <SetupListPage
+      createForm={
+        <AreaCreateForm activeAreaTypes={activeAreaTypes} activeBuildings={activeBuildings} />
+      }
+      description="Manage inspectable spaces under active Buildings and Area Types. Archived parents hide Areas from active lookup lists."
+      emptyDescription="Create an Area or adjust your search to see more results."
+      emptyTitle="No Areas found"
+      listHeading={includeArchived ? "All Areas" : "Active Areas"}
+      listHeadingId="areas-list-heading"
+      records={areas.map((area) => ({
+        id: area.id,
+        href: `/setup/areas/${area.id}`,
+        title: area.name,
+        meta: `${area.clientName} · ${area.buildingName}`,
+        subtitle: `${area.areaTypeName} · ${statusLabel(area)}`,
+      }))}
+      searchForm={
+        <form className="flex flex-col gap-4 sm:flex-row sm:items-end">
+          <label className="flex-1 space-y-1.5" htmlFor="area-search">
+            <span className={ux.fieldLabel}>Area name</span>
             <input
-              className="w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-950 shadow-sm focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100"
+              className={ux.input}
               defaultValue={params?.q ?? ""}
               id="area-search"
               name="q"
@@ -76,51 +76,22 @@ export default async function AreasPage({ searchParams }: AreasPageProps) {
             />
           </label>
           {includeArchived ? <input name="includeArchived" type="hidden" value="1" /> : null}
-          <button className="rounded-xl bg-brand-700 px-5 py-3 text-sm font-semibold text-white shadow-sm hover:bg-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100" type="submit">Search</button>
-          <Link className="py-3 text-sm font-semibold text-brand-700" href={includeArchived ? "/setup/areas?includeArchived=1" : "/setup/areas"}>Clear</Link>
-        </form>
-
-        <div className="space-y-4">
-          <div className="flex items-center justify-between gap-4">
-            <h2 className="text-xl font-semibold text-slate-950">
-              {includeArchived ? "All Areas" : "Active Areas"}
-            </h2>
+          <div className="flex flex-wrap items-end gap-3">
+            <button className={ux.primaryButton} type="submit">
+              Search
+            </button>
             <Link
-              className="text-sm font-semibold text-brand-700"
-              href={includeArchived ? "/setup/areas" : "/setup/areas?includeArchived=1"}
+              className={`${ux.textLink} py-2.5`}
+              href={includeArchived ? "/setup/areas?includeArchived=1" : "/setup/areas"}
             >
-              {includeArchived ? "Show active only" : "Include archived"}
+              Clear
             </Link>
           </div>
-
-          {areas.length === 0 ? (
-            <p className="rounded-2xl border border-slate-200 p-5 text-sm text-muted-ink">
-              No Areas found.
-            </p>
-          ) : (
-            <ul className="divide-y divide-slate-200 rounded-2xl border border-slate-200">
-              {areas.map((area) => (
-                <li key={area.id}>
-                  <Link
-                    className="flex items-center justify-between gap-4 p-5 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-brand-100"
-                    href={`/setup/areas/${area.id}`}
-                  >
-                    <span>
-                      <span className="block font-semibold text-slate-950">
-                        {area.name}
-                      </span>
-                      <span className="mt-1 block text-sm text-muted-ink">
-                        {area.clientName} · {area.buildingName} · {area.areaTypeName} · {statusLabel(area)}
-                      </span>
-                    </span>
-                    <span className="text-sm font-semibold text-brand-700">View</span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </section>
-    </main>
+        </form>
+      }
+      title="Areas"
+      toggleHref={includeArchived ? "/setup/areas" : "/setup/areas?includeArchived=1"}
+      toggleLabel={includeArchived ? "Show active only" : "Include archived"}
+    />
   );
 }

@@ -6,6 +6,16 @@ import {
   getClient,
   listBuildings,
 } from "@/lib/client-building-setup/repository";
+import {
+  PageEmptyState,
+  RecordList,
+  RecordListItem,
+} from "@/lib/ux/app-page";
+import {
+  SetupDetailPage,
+  SetupDetailSection,
+} from "@/lib/ux/setup-detail-page";
+import { ux } from "@/lib/ux/tokens";
 
 import { archiveClientAction, restoreClientAction } from "../actions";
 import { ClientEditForm } from "../client-form";
@@ -42,70 +52,54 @@ export default async function ClientDetailPage({ params }: ClientDetailPageProps
   });
 
   return (
-    <main className="min-h-screen bg-slate-50 px-6 py-10 text-ink sm:px-10">
-      <section className="mx-auto max-w-4xl space-y-8 rounded-card border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-        <div className="space-y-3">
-          <Link className="text-sm font-semibold text-brand-700" href="/setup/clients">
-            ← Clients
-          </Link>
-          <div className="space-y-2">
-            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-brand-700">
-              {client.isArchived ? "Archived Client" : "Active Client"}
-            </p>
-            <h1 className="text-3xl font-bold tracking-tight text-slate-950">
-              {client.name}
-            </h1>
-          </div>
-        </div>
-
+    <SetupDetailPage
+      backHref="/setup/clients"
+      backLabel="Clients"
+      eyebrow={client.isArchived ? "Archived Client" : "Active Client"}
+      title={client.name}
+    >
+      <SetupDetailSection heading="Edit Client" headingId="client-edit-heading" icon="settings">
         <ClientEditForm client={client} />
+      </SetupDetailSection>
 
+      <SetupDetailSection heading="Archive status" headingId="client-archive-heading" icon="shield">
         <form action={client.isArchived ? restoreClientAction : archiveClientAction}>
           <input name="id" type="hidden" value={client.id} />
-          <button
-            className="rounded-xl border border-slate-300 px-5 py-3 text-sm font-semibold text-slate-900 shadow-sm hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-brand-100"
-            type="submit"
-          >
+          <button className={ux.mutedButton} type="submit">
             {client.isArchived ? "Restore Client" : "Archive Client"}
           </button>
         </form>
+      </SetupDetailSection>
 
-        <div className="space-y-4">
-          <div className="flex items-center justify-between gap-4">
-            <h2 className="text-xl font-semibold text-slate-950">Buildings</h2>
-            <Link className="text-sm font-semibold text-brand-700" href="/setup/buildings">
-              Manage Buildings
-            </Link>
-          </div>
-
-          {buildings.length === 0 ? (
-            <p className="rounded-2xl border border-slate-200 p-5 text-sm text-muted-ink">
-              No Buildings have been set up for this Client.
-            </p>
-          ) : (
-            <ul className="divide-y divide-slate-200 rounded-2xl border border-slate-200">
-              {buildings.map((building) => (
-                <li key={building.id}>
-                  <Link
-                    className="flex items-center justify-between gap-4 p-5 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-brand-100"
-                    href={`/setup/buildings/${building.id}`}
-                  >
-                    <span>
-                      <span className="block font-semibold text-slate-950">
-                        {building.name}
-                      </span>
-                      <span className="mt-1 block text-sm text-muted-ink">
-                        {buildingStatus(building)}
-                      </span>
-                    </span>
-                    <span className="text-sm font-semibold text-brand-700">View</span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </section>
-    </main>
+      <SetupDetailSection
+        headerAside={
+          <Link className={ux.textLink} href="/setup/buildings">
+            Manage Buildings
+          </Link>
+        }
+        heading="Buildings"
+        headingId="client-buildings-heading"
+        icon="building"
+      >
+        {buildings.length === 0 ? (
+          <PageEmptyState
+            description="Create a Building under this Client to start assigning Areas and inspection plans."
+            icon="building"
+            title="No Buildings yet"
+          />
+        ) : (
+          <RecordList label="Buildings">
+            {buildings.map((building) => (
+              <RecordListItem
+                href={`/setup/buildings/${building.id}`}
+                key={building.id}
+                subtitle={buildingStatus(building)}
+                title={building.name}
+              />
+            ))}
+          </RecordList>
+        )}
+      </SetupDetailSection>
+    </SetupDetailPage>
   );
 }

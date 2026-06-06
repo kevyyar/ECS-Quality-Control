@@ -2,6 +2,8 @@
 
 import { useActionState, useRef, useState } from "react";
 
+import { ux } from "@/lib/ux/tokens";
+
 import { closeTicketAction, type CloseTicketActionState } from "./actions";
 
 const initialState = { status: "idle" } satisfies CloseTicketActionState;
@@ -79,14 +81,14 @@ export function TicketClosureForm({ ticketId }: { ticketId: string }) {
   }
 
   return (
-    <form action={formAction} className="space-y-4 rounded-2xl border border-slate-200 p-5">
+    <form action={formAction} className="space-y-4">
       <input name="ticketId" type="hidden" value={ticketId} />
       <FieldError message={fieldError(state, "ticketId")} />
 
-      <label className="block space-y-2" htmlFor="resolution-note">
-        <span className="text-sm font-semibold text-slate-900">Resolution note</span>
+      <label className="block space-y-1.5" htmlFor="resolution-note">
+        <span className={ux.fieldLabel}>Resolution note</span>
         <textarea
-          className="min-h-28 w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-950 shadow-sm focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100 disabled:cursor-not-allowed disabled:bg-slate-100"
+          className={`${ux.textarea} min-h-28 disabled:cursor-not-allowed disabled:bg-slate-100`}
           defaultValue={resolutionNoteValue(state)}
           disabled={isClosed}
           id="resolution-note"
@@ -98,11 +100,11 @@ export function TicketClosureForm({ ticketId }: { ticketId: string }) {
       </label>
 
       <div className="space-y-3">
-        <label className="block space-y-2" htmlFor="after-photos">
-          <span className="text-sm font-semibold text-slate-900">After Photos</span>
+        <label className="block space-y-1.5" htmlFor="after-photos">
+          <span className={ux.fieldLabel}>After Photos</span>
           <input
             accept="image/jpeg,image/png,image/webp"
-            className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm text-slate-950 shadow-sm file:mr-4 file:rounded-lg file:border-0 file:bg-brand-700 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100 disabled:cursor-not-allowed disabled:bg-slate-100"
+            className={`${ux.fileInput} disabled:cursor-not-allowed disabled:bg-slate-100`}
             disabled={isClosed}
             id="after-photos"
             multiple
@@ -144,13 +146,13 @@ export function TicketClosureForm({ ticketId }: { ticketId: string }) {
       ) : null}
 
       {state.status === "success" ? (
-        <p className="rounded-xl border border-brand-100 bg-brand-50 px-4 py-3 text-sm font-medium text-brand-700">
+        <p className={ux.successMessage}>
           {state.message}
         </p>
       ) : null}
 
       <button
-        className="rounded-xl bg-brand-700 px-5 py-3 text-sm font-semibold text-white shadow-sm hover:bg-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100 disabled:cursor-not-allowed disabled:opacity-60"
+        className={ux.primaryButton}
         disabled={isPending || isClosed}
         type="submit"
       >

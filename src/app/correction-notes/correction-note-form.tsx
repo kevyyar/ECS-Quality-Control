@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 
 import type { CorrectionNoteTargetType } from "@/lib/correction-notes/model";
+import { ux } from "@/lib/ux/tokens";
 
 import { addCorrectionNoteAction, type AddCorrectionNoteActionState } from "./actions";
 
@@ -41,16 +42,16 @@ export function CorrectionNoteForm({
   );
 
   return (
-    <form action={formAction} className="space-y-4 rounded-2xl border border-slate-200 p-5">
+    <form action={formAction} className="space-y-4">
       <input name="targetType" type="hidden" value={targetType} />
       <input name="targetId" type="hidden" value={targetId} />
       <FieldError message={fieldError(state, "targetType")} />
       <FieldError message={fieldError(state, "targetId")} />
 
-      <label className="block space-y-2" htmlFor={`correction-note-${targetId}`}>
-        <span className="text-sm font-semibold text-slate-900">Correction Note</span>
+      <label className="block space-y-1.5" htmlFor={`correction-note-${targetId}`}>
+        <span className={ux.fieldLabel}>Correction Note</span>
         <textarea
-          className="min-h-24 w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-950 shadow-sm focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100"
+          className={`${ux.textarea} min-h-24`}
           defaultValue={noteValue(state)}
           id={`correction-note-${targetId}`}
           maxLength={1000}
@@ -67,13 +68,13 @@ export function CorrectionNoteForm({
       ) : null}
 
       {state.status === "success" ? (
-        <p className="rounded-xl border border-brand-100 bg-brand-50 px-4 py-3 text-sm font-medium text-brand-700">
+        <p className={ux.successMessage}>
           {state.message}
         </p>
       ) : null}
 
       <button
-        className="rounded-xl bg-brand-700 px-5 py-3 text-sm font-semibold text-white shadow-sm hover:bg-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100 disabled:cursor-not-allowed disabled:opacity-60"
+        className={ux.primaryButton}
         disabled={isPending}
         type="submit"
       >
