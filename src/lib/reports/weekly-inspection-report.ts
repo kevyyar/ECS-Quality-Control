@@ -362,13 +362,13 @@ function drawOverview(doc: PDFKit.PDFDocument, report: WeeklyInspectionReportDat
   doc.roundedRect(PAGE_MARGIN, y, CONTENT_WIDTH, 146, 12).fill("#ffffff");
   doc.roundedRect(PAGE_MARGIN, y, CONTENT_WIDTH, 146, 12).stroke(theme.border);
 
-  drawText(doc, `${report.clientName} · ${report.buildingName}`, PAGE_MARGIN + 18, y + 16, {
+  const headingEndY = drawText(doc, `${report.clientName} · ${report.buildingName}`, PAGE_MARGIN + 18, y + 16, {
     bold: true,
     color: theme.ink,
     size: 16,
     width: 330,
   });
-  drawText(doc, `Submitted by ${report.submittedByEmail ?? "Unknown"}`, PAGE_MARGIN + 18, y + 42, {
+  drawText(doc, `Submitted by ${report.submittedByEmail ?? "Unknown"}`, PAGE_MARGIN + 18, headingEndY + 6, {
     color: theme.muted,
     size: 9,
     width: 330,
