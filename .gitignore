@@ -39,3 +39,5 @@ pnpm-debug.log*
 
 # TypeScript incremental cache
 *.tsbuildinfo
+.vercel
+.env*
