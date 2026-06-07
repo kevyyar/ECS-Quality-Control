@@ -13,9 +13,9 @@ const files = {
 
 describe("MVP responsive, accessibility, and UX polish", () => {
   it("lets filter action rows wrap on narrow screens", () => {
-    expect(files.dashboardRangeFilter).toContain("flex flex-wrap items-end gap-3");
-    expect(files.inspections).toContain("flex flex-wrap items-end gap-3");
-    expect(files.tickets).toContain("flex flex-wrap items-end gap-3");
+    expect(files.dashboardRangeFilter).toContain("ux.searchActions");
+    expect(files.inspections).toContain("ux.searchActions");
+    expect(files.tickets).toContain("ux.searchActions");
   });
 
   it("gives Before Photo file upload an accessible visible label and mobile-friendly control styling", () => {

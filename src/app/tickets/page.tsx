@@ -66,7 +66,7 @@ function FilterSelect({
   value: string | undefined;
 }) {
   return (
-    <label className="space-y-1.5" htmlFor={`ticket-filter-${name}`}>
+    <label className={ux.formField} htmlFor={`ticket-filter-${name}`}>
       <span className={ux.fieldLabel}>{label}</span>
       <select
         className={ux.select}
@@ -118,7 +118,7 @@ export default async function TicketsPage({ searchParams }: TicketsPageProps) {
       <AppPageBody>
         <PageSection heading="Filters" headingId="ticket-filters-heading" icon="filter">
           <form className="grid gap-4 lg:grid-cols-5">
-            <label className="space-y-1.5 lg:col-span-2" htmlFor="ticket-search">
+            <label className={`${ux.formField} lg:col-span-2`} htmlFor="ticket-search">
               <span className={ux.fieldLabel}>Search</span>
               <input
                 className={ux.input}
@@ -147,11 +147,11 @@ export default async function TicketsPage({ searchParams }: TicketsPageProps) {
               options={uniqueOptions(allOpenTickets, "area")}
               value={params?.areaId}
             />
-            <div className="flex flex-wrap items-end gap-3 lg:col-span-5">
+            <div className={`${ux.searchActions} lg:col-span-5`}>
               <button className={ux.primaryButton} type="submit">
                 Apply filters
               </button>
-              <Link className={`${ux.textLink} py-2.5`} href="/tickets">
+              <Link className={ux.textLink} href="/tickets">
                 Clear
               </Link>
             </div>

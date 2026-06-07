@@ -42,13 +42,13 @@ export function CorrectionNoteForm({
   );
 
   return (
-    <form action={formAction} className="space-y-4">
+    <form action={formAction} className={ux.formStack}>
       <input name="targetType" type="hidden" value={targetType} />
       <input name="targetId" type="hidden" value={targetId} />
       <FieldError message={fieldError(state, "targetType")} />
       <FieldError message={fieldError(state, "targetId")} />
 
-      <label className="block space-y-1.5" htmlFor={`correction-note-${targetId}`}>
+      <label className={ux.formField} htmlFor={`correction-note-${targetId}`}>
         <span className={ux.fieldLabel}>Correction Note</span>
         <textarea
           className={`${ux.textarea} min-h-24`}
@@ -56,6 +56,7 @@ export function CorrectionNoteForm({
           id={`correction-note-${targetId}`}
           maxLength={1000}
           name="note"
+          placeholder="Describe the correction needed"
           required
         />
         <FieldError message={fieldError(state, "note")} />
@@ -73,13 +74,15 @@ export function CorrectionNoteForm({
         </p>
       ) : null}
 
-      <button
-        className={ux.primaryButton}
-        disabled={isPending}
-        type="submit"
-      >
-        {isPending ? "Adding…" : "Add Correction Note"}
-      </button>
+      <div className={ux.formFooter}>
+        <button
+          className={ux.primaryButton}
+          disabled={isPending}
+          type="submit"
+        >
+          {isPending ? "Adding…" : "Add Correction Note"}
+        </button>
+      </div>
     </form>
   );
 }

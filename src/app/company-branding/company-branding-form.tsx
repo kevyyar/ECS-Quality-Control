@@ -48,9 +48,9 @@ export function CompanyBrandingForm({ branding }: CompanyBrandingFormProps) {
   const currentLogoUrl = fieldValue(state, branding, "logoUrl");
 
   return (
-    <form action={formAction} className="space-y-6">
+    <form action={formAction} className={ux.formStack}>
       <div className="grid gap-5 sm:grid-cols-2">
-        <label className="space-y-1.5 sm:col-span-2" htmlFor="displayName">
+        <label className={`${ux.formField} sm:col-span-2`} htmlFor="displayName">
           <span className={ux.fieldLabel}>Company display name</span>
           <input
             className={ux.input}
@@ -62,7 +62,7 @@ export function CompanyBrandingForm({ branding }: CompanyBrandingFormProps) {
           <FieldError message={fieldError(state, "displayName")} />
         </label>
 
-        <label className="space-y-1.5" htmlFor="logoFile">
+        <label className={ux.formField} htmlFor="logoFile">
           <span className={ux.fieldLabel}>Company logo</span>
           <input
             name="logoUrl"
@@ -105,7 +105,7 @@ export function CompanyBrandingForm({ branding }: CompanyBrandingFormProps) {
           <FieldError message={fieldError(state, "logoUrl")} />
         </label>
 
-        <label className="space-y-1.5" htmlFor="primaryBrandColor">
+        <label className={ux.formField} htmlFor="primaryBrandColor">
           <span className={ux.fieldLabel}>Primary brand color</span>
           <input
             className={ux.colorInput}
@@ -119,12 +119,13 @@ export function CompanyBrandingForm({ branding }: CompanyBrandingFormProps) {
         </label>
       </div>
 
-      <fieldset className="grid gap-5 rounded-2xl border border-slate-200 p-5 sm:grid-cols-2">
-        <legend className="px-2 text-sm font-semibold text-slate-900">
+      <fieldset className={`${ux.itemWell} sm:grid-cols-2`}>
+        <legend className="sr-only">Optional report contact details</legend>
+        <p className="text-sm font-semibold text-slate-900 sm:col-span-2">
           Optional report contact details
-        </legend>
+        </p>
 
-        <label className="space-y-1.5" htmlFor="contactPhone">
+        <label className={ux.formField} htmlFor="contactPhone">
           <span className={ux.fieldLabel}>Phone</span>
           <input
             className={ux.input}
@@ -135,7 +136,7 @@ export function CompanyBrandingForm({ branding }: CompanyBrandingFormProps) {
           <FieldError message={fieldError(state, "contactPhone")} />
         </label>
 
-        <label className="space-y-1.5" htmlFor="contactEmail">
+        <label className={ux.formField} htmlFor="contactEmail">
           <span className={ux.fieldLabel}>Email</span>
           <input
             className={ux.input}
@@ -147,7 +148,7 @@ export function CompanyBrandingForm({ branding }: CompanyBrandingFormProps) {
           <FieldError message={fieldError(state, "contactEmail")} />
         </label>
 
-        <label className="space-y-1.5" htmlFor="contactWebsite">
+        <label className={ux.formField} htmlFor="contactWebsite">
           <span className={ux.fieldLabel}>Website</span>
           <input
             className={ux.input}
@@ -159,7 +160,7 @@ export function CompanyBrandingForm({ branding }: CompanyBrandingFormProps) {
           <FieldError message={fieldError(state, "contactWebsite")} />
         </label>
 
-        <label className="space-y-1.5 sm:col-span-2" htmlFor="contactAddress">
+        <label className={`${ux.formField} sm:col-span-2`} htmlFor="contactAddress">
           <span className={ux.fieldLabel}>Address</span>
           <textarea
             className={`${ux.textarea} min-h-28`}
@@ -177,13 +178,15 @@ export function CompanyBrandingForm({ branding }: CompanyBrandingFormProps) {
         </p>
       ) : null}
 
-      <button
-        className={ux.primaryButton}
-        disabled={isPending}
-        type="submit"
-      >
-        {isPending ? "Saving…" : "Save Company Branding"}
-      </button>
+      <div className={ux.formFooter}>
+        <button
+          className={ux.primaryButton}
+          disabled={isPending}
+          type="submit"
+        >
+          {isPending ? "Saving…" : "Save Company Branding"}
+        </button>
+      </div>
     </form>
   );
 }

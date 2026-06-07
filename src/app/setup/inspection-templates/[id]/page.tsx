@@ -86,9 +86,12 @@ export default async function InspectionTemplateDetailPage({
             title="No items yet"
           />
         ) : (
-          <ol className="divide-y divide-slate-100 rounded-xl border border-slate-200/80">
+          <ol className="grid gap-3">
             {sortedItems.map((item) => (
-              <li className="px-4 py-4" key={item.id}>
+              <li
+                className="rounded-xl border border-slate-200/80 bg-slate-50/60 p-4 sm:p-5"
+                key={item.id}
+              >
                 <div className="font-display font-bold text-slate-950">
                   {item.position}. {item.name}
                 </div>

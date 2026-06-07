@@ -43,14 +43,15 @@ export function ClientCreateForm() {
   );
 
   return (
-    <form action={formAction} className="space-y-4">
-      <label className="space-y-1.5" htmlFor="client-name">
+    <form action={formAction} className={ux.formStack}>
+      <label className={ux.formField} htmlFor="client-name">
         <span className={ux.fieldLabel}>Client name</span>
         <input
           className={ux.input}
           defaultValue={clientNameValue(state)}
           id="client-name"
           name="name"
+          placeholder="e.g. Apex Property Group"
           required
         />
         <FieldError message={nameError(state)} />
@@ -62,13 +63,15 @@ export function ClientCreateForm() {
         </p>
       ) : null}
 
-      <button
-        className={ux.primaryButton}
-        disabled={isPending}
-        type="submit"
-      >
-        {isPending ? "Saving…" : "Create Client"}
-      </button>
+      <div className={ux.formFooter}>
+        <button
+          className={ux.primaryButton}
+          disabled={isPending}
+          type="submit"
+        >
+          {isPending ? "Saving…" : "Create Client"}
+        </button>
+      </div>
     </form>
   );
 }
@@ -80,9 +83,9 @@ export function ClientEditForm({ client }: { client: ClientSetupRecord }) {
   );
 
   return (
-    <form action={formAction} className="space-y-4">
+    <form action={formAction} className={ux.formStack}>
       <input name="id" type="hidden" value={client.id} />
-      <label className="space-y-1.5" htmlFor="client-name">
+      <label className={ux.formField} htmlFor="client-name">
         <span className={ux.fieldLabel}>Client name</span>
         <input
           className={ux.input}
@@ -100,13 +103,15 @@ export function ClientEditForm({ client }: { client: ClientSetupRecord }) {
         </p>
       ) : null}
 
-      <button
-        className={ux.primaryButton}
-        disabled={isPending}
-        type="submit"
-      >
-        {isPending ? "Saving…" : "Save Client"}
-      </button>
+      <div className={ux.formFooter}>
+        <button
+          className={ux.primaryButton}
+          disabled={isPending}
+          type="submit"
+        >
+          {isPending ? "Saving…" : "Save Client"}
+        </button>
+      </div>
     </form>
   );
 }

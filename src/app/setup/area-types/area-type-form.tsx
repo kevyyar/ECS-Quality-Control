@@ -43,14 +43,15 @@ export function AreaTypeCreateForm() {
   );
 
   return (
-    <form action={formAction} className="space-y-4 rounded-2xl border border-slate-200 p-5">
-      <label className="space-y-2" htmlFor="area-type-name">
-        <span className="text-sm font-semibold text-slate-900">Area Type name</span>
+    <form action={formAction} className={ux.formStack}>
+      <label className={ux.formField} htmlFor="area-type-name">
+        <span className={ux.fieldLabel}>Area Type name</span>
         <input
           className={ux.input}
           defaultValue={areaTypeNameValue(state)}
           id="area-type-name"
           name="name"
+          placeholder="e.g. Restroom"
           required
         />
         <FieldError message={nameError(state)} />
@@ -62,13 +63,15 @@ export function AreaTypeCreateForm() {
         </p>
       ) : null}
 
-      <button
-        className={ux.primaryButton}
-        disabled={isPending}
-        type="submit"
-      >
-        {isPending ? "Saving…" : "Create Area Type"}
-      </button>
+      <div className={ux.formFooter}>
+        <button
+          className={ux.primaryButton}
+          disabled={isPending}
+          type="submit"
+        >
+          {isPending ? "Saving…" : "Create Area Type"}
+        </button>
+      </div>
     </form>
   );
 }
@@ -80,10 +83,10 @@ export function AreaTypeEditForm({ areaType }: { areaType: AreaTypeSetupRecord }
   );
 
   return (
-    <form action={formAction} className="space-y-4 rounded-2xl border border-slate-200 p-5">
+    <form action={formAction} className={ux.formStack}>
       <input name="id" type="hidden" value={areaType.id} />
-      <label className="space-y-2" htmlFor="area-type-name">
-        <span className="text-sm font-semibold text-slate-900">Area Type name</span>
+      <label className={ux.formField} htmlFor="area-type-name">
+        <span className={ux.fieldLabel}>Area Type name</span>
         <input
           className={ux.input}
           defaultValue={areaTypeNameValue(state, areaType)}
@@ -100,13 +103,15 @@ export function AreaTypeEditForm({ areaType }: { areaType: AreaTypeSetupRecord }
         </p>
       ) : null}
 
-      <button
-        className={ux.primaryButton}
-        disabled={isPending}
-        type="submit"
-      >
-        {isPending ? "Saving…" : "Save Area Type"}
-      </button>
+      <div className={ux.formFooter}>
+        <button
+          className={ux.primaryButton}
+          disabled={isPending}
+          type="submit"
+        >
+          {isPending ? "Saving…" : "Save Area Type"}
+        </button>
+      </div>
     </form>
   );
 }

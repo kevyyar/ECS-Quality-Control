@@ -47,8 +47,8 @@ export default async function SetupPage({ searchParams }: SetupPageProps) {
 
       <AppPageBody>
         <PageSection heading="Search setup records" headingId="setup-search-heading" icon="search">
-          <form className="flex flex-col gap-4 sm:flex-row sm:items-end">
-            <label className="flex-1 space-y-1.5" htmlFor="setup-search">
+          <form className={ux.searchForm}>
+            <label className={ux.formField} htmlFor="setup-search">
               <span className={ux.fieldLabel}>Name</span>
               <input
                 className={ux.input}
@@ -59,11 +59,11 @@ export default async function SetupPage({ searchParams }: SetupPageProps) {
                 type="search"
               />
             </label>
-            <div className="flex flex-wrap items-end gap-3">
+            <div className={ux.searchActions}>
               <button className={ux.primaryButton} type="submit">
                 Search
               </button>
-              <Link className={`${ux.textLink} py-2.5`} href="/setup">
+              <Link className={ux.textLink} href="/setup">
                 Clear
               </Link>
             </div>

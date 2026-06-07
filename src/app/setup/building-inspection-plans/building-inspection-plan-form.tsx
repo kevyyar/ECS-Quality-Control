@@ -127,12 +127,11 @@ export function BuildingInspectionPlanForm({
   }
 
   return (
-    <form action={formAction} className="space-y-5 rounded-2xl border border-slate-200 p-5">
+    <form action={formAction} className={ux.formStack}>
       <input name="buildingId" type="hidden" value={buildingId} />
 
-      <div className="space-y-2">
-        <h2 className="text-lg font-semibold text-slate-950">Plan entries</h2>
-        <p className="text-sm text-muted-ink">
+      <div className="grid gap-1">
+        <p className="max-w-prose text-sm text-muted-ink">
           Each row assigns one active Area to one active Inspection Template. Row order is
           used when starting future Draft Inspections.
         </p>
@@ -140,7 +139,7 @@ export function BuildingInspectionPlanForm({
         <FieldError message={state.status === "error" ? state.errors.buildingId : undefined} />
       </div>
 
-      <div className="space-y-4">
+      <div className="grid gap-4">
         {rows.map((row, index) => {
           const staleArea = row.areaId ? findPlanEntryForAreaId(plan, row.areaId) : undefined;
           const staleTemplate = row.inspectionTemplateId
@@ -150,11 +149,13 @@ export function BuildingInspectionPlanForm({
           const activeTemplateIds = new Set(activeTemplates.map((template) => template.id));
 
           return (
-            <fieldset className="space-y-3 rounded-2xl border border-slate-200 p-4" key={row.key}>
-              <div className="flex items-center justify-between gap-3">
-                <legend className="text-sm font-semibold text-slate-900">
+            <fieldset className={ux.itemWell} key={row.key}>
+              <legend className="sr-only">Area/template pair {index + 1}</legend>
+
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/70 pb-4">
+                <span className="text-sm font-semibold text-slate-900">
                   Area/template pair {index + 1}
-                </legend>
+                </span>
                 <div className="flex flex-wrap gap-2">
                   <button
                     className={ux.compactButton}
@@ -183,67 +184,73 @@ export function BuildingInspectionPlanForm({
                 </div>
               </div>
 
-              <label className="space-y-2" htmlFor={`plan-area-${row.key}`}>
-                <span className="text-sm font-semibold text-slate-900">Area</span>
-                <select
-                  className={ux.input}
-                  id={`plan-area-${row.key}`}
-                  name="areaId"
-                  onChange={(event) => updateRow(index, { areaId: event.target.value })}
-                  required
-                  value={row.areaId}
-                >
-                  <option value="">Select an Area</option>
-                  {row.areaId && !activeAreaIds.has(row.areaId) && staleArea ? (
-                    <option value={row.areaId}>
-                      {staleArea.areaName} (archived or unavailable — choose an active Area)
-                    </option>
-                  ) : null}
-                  {activeAreas.map((area) => (
-                    <option key={area.id} value={area.id}>
-                      {area.name} · {area.areaTypeName}
-                    </option>
-                  ))}
-                </select>
-                <FieldError message={entryError(state, index, "areaId")} />
-              </label>
+              <div className="grid gap-4">
+                <label className={ux.formField} htmlFor={`plan-area-${row.key}`}>
+                  <span className={ux.fieldLabel}>Area</span>
+                  <select
+                    className={ux.select}
+                    id={`plan-area-${row.key}`}
+                    name="areaId"
+                    onChange={(event) => updateRow(index, { areaId: event.target.value })}
+                    required
+                    value={row.areaId}
+                  >
+                    <option value="">Select an Area</option>
+                    {row.areaId && !activeAreaIds.has(row.areaId) && staleArea ? (
+                      <option value={row.areaId}>
+                        {staleArea.areaName} (archived or unavailable — choose an active Area)
+                      </option>
+                    ) : null}
+                    {activeAreas.map((area) => (
+                      <option key={area.id} value={area.id}>
+                        {area.name} · {area.areaTypeName}
+                      </option>
+                    ))}
+                  </select>
+                  <FieldError message={entryError(state, index, "areaId")} />
+                </label>
 
-              <label className="space-y-2" htmlFor={`plan-template-${row.key}`}>
-                <span className="text-sm font-semibold text-slate-900">
-                  Inspection Template
-                </span>
-                <select
-                  className={ux.input}
-                  id={`plan-template-${row.key}`}
-                  name="inspectionTemplateId"
-                  onChange={(event) =>
-                    updateRow(index, { inspectionTemplateId: event.target.value })
-                  }
-                  required
-                  value={row.inspectionTemplateId}
-                >
-                  <option value="">Select an Inspection Template</option>
-                  {row.inspectionTemplateId &&
-                  !activeTemplateIds.has(row.inspectionTemplateId) &&
-                  staleTemplate ? (
-                    <option value={row.inspectionTemplateId}>
-                      {staleTemplate.inspectionTemplateName} (archived — choose an active Template)
-                    </option>
-                  ) : null}
-                  {activeTemplates.map((template) => (
-                    <option key={template.id} value={template.id}>
-                      {template.name}
-                    </option>
-                  ))}
-                </select>
-                <FieldError message={entryError(state, index, "inspectionTemplateId")} />
-              </label>
+                <label className={ux.formField} htmlFor={`plan-template-${row.key}`}>
+                  <span className={ux.fieldLabel}>Inspection Template</span>
+                  <select
+                    className={ux.select}
+                    id={`plan-template-${row.key}`}
+                    name="inspectionTemplateId"
+                    onChange={(event) =>
+                      updateRow(index, { inspectionTemplateId: event.target.value })
+                    }
+                    required
+                    value={row.inspectionTemplateId}
+                  >
+                    <option value="">Select an Inspection Template</option>
+                    {row.inspectionTemplateId &&
+                    !activeTemplateIds.has(row.inspectionTemplateId) &&
+                    staleTemplate ? (
+                      <option value={row.inspectionTemplateId}>
+                        {staleTemplate.inspectionTemplateName} (archived — choose an active Template)
+                      </option>
+                    ) : null}
+                    {activeTemplates.map((template) => (
+                      <option key={template.id} value={template.id}>
+                        {template.name}
+                      </option>
+                    ))}
+                  </select>
+                  <FieldError message={entryError(state, index, "inspectionTemplateId")} />
+                </label>
+              </div>
             </fieldset>
           );
         })}
       </div>
 
-      <div className="flex flex-wrap items-center gap-3">
+      {state.status === "success" ? (
+        <p className={ux.successMessage}>
+          {state.message}
+        </p>
+      ) : null}
+
+      <div className={`flex flex-wrap items-center gap-3 ${ux.formFooter}`}>
         <button
           className={ux.mutedButton}
           onClick={() => setRows((current) => [...current, newPlanRow()])}
@@ -260,12 +267,6 @@ export function BuildingInspectionPlanForm({
           {isPending ? "Saving…" : "Save Building Inspection Plan"}
         </button>
       </div>
-
-      {state.status === "success" ? (
-        <p className={ux.successMessage}>
-          {state.message}
-        </p>
-      ) : null}
     </form>
   );
 }

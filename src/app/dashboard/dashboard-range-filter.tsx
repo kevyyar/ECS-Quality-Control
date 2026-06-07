@@ -9,6 +9,7 @@ import {
   type DashboardRangePreset,
 } from "@/lib/dashboard/range-url";
 import { resolveDateRange } from "@/lib/date-ranges";
+import { ux } from "@/lib/ux/tokens";
 
 function CalIcon({ className }: { className?: string }) {
   return (
@@ -137,14 +138,12 @@ export function DashboardRangeFilter({
       </div>
 
       <form className="grid gap-3 sm:grid-cols-3" onSubmit={onCustomSubmit}>
-        <label className="space-y-1.5" htmlFor="dashboard-start-date">
-          <span className="text-xs font-semibold uppercase tracking-wider text-muted-ink">
-            Start date
-          </span>
+        <label className={ux.formField} htmlFor="dashboard-start-date">
+          <span className={ux.fieldLabel}>Start date</span>
           <div className="relative">
             <CalIcon className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
             <input
-              className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-9 pr-3 text-sm text-slate-950 shadow-sm focus:border-brand-forest-500 focus:outline-none focus:ring-2 focus:ring-brand-emerald-200"
+              className={`${ux.input} pl-9`}
               defaultValue={startDateInput}
               id="dashboard-start-date"
               key={`start-${startDateInput}`}
@@ -153,14 +152,12 @@ export function DashboardRangeFilter({
             />
           </div>
         </label>
-        <label className="space-y-1.5" htmlFor="dashboard-end-date">
-          <span className="text-xs font-semibold uppercase tracking-wider text-muted-ink">
-            End date
-          </span>
+        <label className={ux.formField} htmlFor="dashboard-end-date">
+          <span className={ux.fieldLabel}>End date</span>
           <div className="relative">
             <CalIcon className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
             <input
-              className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-9 pr-3 text-sm text-slate-950 shadow-sm focus:border-brand-forest-500 focus:outline-none focus:ring-2 focus:ring-brand-emerald-200"
+              className={`${ux.input} pl-9`}
               defaultValue={endDateInput}
               id="dashboard-end-date"
               key={`end-${endDateInput}`}
@@ -169,9 +166,9 @@ export function DashboardRangeFilter({
             />
           </div>
         </label>
-        <div className="flex flex-wrap items-end gap-3">
+        <div className={ux.searchActions}>
           <button
-            className="inline-flex h-[42px] items-center gap-2 rounded-xl bg-brand-forest-800 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-forest-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-400 disabled:cursor-wait"
+            className={`${ux.primaryButton} inline-flex items-center gap-2`}
             disabled={isPending}
             type="submit"
           >

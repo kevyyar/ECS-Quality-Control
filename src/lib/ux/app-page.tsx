@@ -186,7 +186,7 @@ export function AppPageBody({
         ? "-mt-6 space-y-8"
         : overlap === "flush"
           ? "space-y-6"
-          : "-mt-8 space-y-6";
+          : "-mt-8 space-y-8";
 
   return (
     <div className="relative mx-auto max-w-6xl px-6 pb-16 sm:px-10">
@@ -219,17 +219,17 @@ export function PageSection({
   return (
     <section
       aria-labelledby={headingId}
-      className="rounded-2xl border border-slate-200/80 bg-white/90 p-5 shadow-sm backdrop-blur-sm sm:p-6"
+      className="grid gap-5 rounded-2xl border border-slate-200/80 bg-white/90 p-5 shadow-sm backdrop-blur-sm sm:p-6"
     >
       {heading ? (
-        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/70 pb-4">
           <div className="flex items-center gap-2.5">
             {icon ? (
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-forest-800 text-brand-emerald-300 shadow-sm">
                 <Glyph className="size-4.5" name={icon} />
               </div>
             ) : null}
-            <div>
+            <div className="grid gap-0.5">
               <h2
                 className="font-display text-base font-bold text-slate-900"
                 id={headingId}
@@ -237,7 +237,7 @@ export function PageSection({
                 {heading}
               </h2>
               {description ? (
-                <p className="mt-0.5 text-sm text-muted-ink">{description}</p>
+                <p className="max-w-prose text-sm text-muted-ink">{description}</p>
               ) : null}
             </div>
             {badge}
@@ -309,7 +309,10 @@ export function RecordListItem({
 }: RecordListItemProps) {
   return (
     <li>
-      <Link className="group flex items-center justify-between gap-4 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm transition hover:border-brand-forest-300 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-400" href={href}>
+      <Link
+        className="group flex items-center justify-between gap-4 rounded-xl border border-slate-200/80 bg-slate-50/60 p-4 transition hover:border-brand-forest-300 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-400 sm:p-5"
+        href={href}
+      >
         <span className="min-w-0">
           <span className="block font-display text-base font-bold text-slate-950">
             {title}
@@ -370,7 +373,10 @@ export function PageBandHeading({
 
 export function SetupNavCard({ href, title, description }: SetupNavCardProps) {
   return (
-    <Link className="block rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm transition hover:border-brand-forest-300 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-400" href={href}>
+    <Link
+      className="block rounded-xl border border-slate-200/80 bg-slate-50/60 p-5 transition hover:border-brand-forest-300 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-400"
+      href={href}
+    >
       <span className="block font-display text-lg font-bold text-slate-950">
         {title}
       </span>

@@ -64,24 +64,25 @@ export default async function AreasPage({ searchParams }: AreasPageProps) {
         subtitle: `${area.areaTypeName} · ${statusLabel(area)}`,
       }))}
       searchForm={
-        <form className="flex flex-col gap-4 sm:flex-row sm:items-end">
-          <label className="flex-1 space-y-1.5" htmlFor="area-search">
+        <form className={ux.searchForm}>
+          <label className={ux.formField} htmlFor="area-search">
             <span className={ux.fieldLabel}>Area name</span>
             <input
               className={ux.input}
               defaultValue={params?.q ?? ""}
               id="area-search"
               name="q"
+              placeholder="Search by name"
               type="search"
             />
           </label>
           {includeArchived ? <input name="includeArchived" type="hidden" value="1" /> : null}
-          <div className="flex flex-wrap items-end gap-3">
+          <div className={ux.searchActions}>
             <button className={ux.primaryButton} type="submit">
               Search
             </button>
             <Link
-              className={`${ux.textLink} py-2.5`}
+              className={ux.textLink}
               href={includeArchived ? "/setup/areas?includeArchived=1" : "/setup/areas"}
             >
               Clear

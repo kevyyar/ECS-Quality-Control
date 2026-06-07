@@ -58,18 +58,18 @@ export function BuildingCreateForm({
 
   if (activeClients.length === 0) {
     return (
-      <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">
+      <div className="rounded-xl border border-amber-200/80 bg-amber-50 px-5 py-4 text-sm text-amber-900">
         Create or restore an active Client before adding Buildings.
       </div>
     );
   }
 
   return (
-    <form action={formAction} className="space-y-4 rounded-2xl border border-slate-200 p-5">
-      <label className="space-y-2" htmlFor="building-client-id">
-        <span className="text-sm font-semibold text-slate-900">Client</span>
+    <form action={formAction} className={ux.formStack}>
+      <label className={ux.formField} htmlFor="building-client-id">
+        <span className={ux.fieldLabel}>Client</span>
         <select
-          className={ux.input}
+          className={ux.select}
           defaultValue={selectedClientValue(state)}
           id="building-client-id"
           name="clientId"
@@ -85,13 +85,14 @@ export function BuildingCreateForm({
         <FieldError message={fieldError(state, "clientId")} />
       </label>
 
-      <label className="space-y-2" htmlFor="building-name">
-        <span className="text-sm font-semibold text-slate-900">Building name</span>
+      <label className={ux.formField} htmlFor="building-name">
+        <span className={ux.fieldLabel}>Building name</span>
         <input
           className={ux.input}
           defaultValue={buildingNameValue(state)}
           id="building-name"
           name="name"
+          placeholder="e.g. Meridian Tower"
           required
         />
         <FieldError message={fieldError(state, "name")} />
@@ -103,13 +104,15 @@ export function BuildingCreateForm({
         </p>
       ) : null}
 
-      <button
-        className={ux.primaryButton}
-        disabled={isPending}
-        type="submit"
-      >
-        {isPending ? "Saving…" : "Create Building"}
-      </button>
+      <div className={ux.formFooter}>
+        <button
+          className={ux.primaryButton}
+          disabled={isPending}
+          type="submit"
+        >
+          {isPending ? "Saving…" : "Create Building"}
+        </button>
+      </div>
     </form>
   );
 }
@@ -121,10 +124,10 @@ export function BuildingEditForm({ building }: { building: BuildingSetupRecord }
   );
 
   return (
-    <form action={formAction} className="space-y-4 rounded-2xl border border-slate-200 p-5">
+    <form action={formAction} className={ux.formStack}>
       <input name="id" type="hidden" value={building.id} />
-      <label className="space-y-2" htmlFor="building-name">
-        <span className="text-sm font-semibold text-slate-900">Building name</span>
+      <label className={ux.formField} htmlFor="building-name">
+        <span className={ux.fieldLabel}>Building name</span>
         <input
           className={ux.input}
           defaultValue={buildingNameValue(state, building)}
@@ -141,13 +144,15 @@ export function BuildingEditForm({ building }: { building: BuildingSetupRecord }
         </p>
       ) : null}
 
-      <button
-        className={ux.primaryButton}
-        disabled={isPending}
-        type="submit"
-      >
-        {isPending ? "Saving…" : "Save Building"}
-      </button>
+      <div className={ux.formFooter}>
+        <button
+          className={ux.primaryButton}
+          disabled={isPending}
+          type="submit"
+        >
+          {isPending ? "Saving…" : "Save Building"}
+        </button>
+      </div>
     </form>
   );
 }

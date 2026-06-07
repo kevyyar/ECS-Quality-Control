@@ -135,37 +135,39 @@ function InspectionTemplateForm({
   }
 
   return (
-    <form action={formAction} className="space-y-5 rounded-2xl border border-slate-200 p-5">
+    <form action={formAction} className={ux.formStack}>
       {template ? <input name="id" type="hidden" value={template.id} /> : null}
 
-      <label className="space-y-2" htmlFor={`${formId}-name`}>
-        <span className="text-sm font-semibold text-slate-900">Template name</span>
-        <input
-          className={ux.input}
-          defaultValue={fieldValue(state, "name", template)}
-          id={`${formId}-name`}
-          name="name"
-          required
-        />
-        <FieldError message={fieldError(state, "name")} />
-      </label>
+      <div className="grid gap-5">
+        <label className={ux.formField} htmlFor={`${formId}-name`}>
+          <span className={ux.fieldLabel}>Template name</span>
+          <input
+            className={ux.input}
+            defaultValue={fieldValue(state, "name", template)}
+            id={`${formId}-name`}
+            name="name"
+            required
+          />
+          <FieldError message={fieldError(state, "name")} />
+        </label>
 
-      <label className="space-y-2" htmlFor={`${formId}-description`}>
-        <span className="text-sm font-semibold text-slate-900">Description</span>
-        <textarea
-          className={` min-h-24`}
-          defaultValue={fieldValue(state, "description", template)}
-          id={`${formId}-description`}
-          name="description"
-        />
-        <FieldError message={fieldError(state, "description")} />
-      </label>
+        <label className={ux.formField} htmlFor={`${formId}-description`}>
+          <span className={ux.fieldLabel}>Description</span>
+          <textarea
+            className={`${ux.textarea} min-h-24`}
+            defaultValue={fieldValue(state, "description", template)}
+            id={`${formId}-description`}
+            name="description"
+          />
+          <FieldError message={fieldError(state, "description")} />
+        </label>
+      </div>
 
-      <div className="space-y-3">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <h2 className="text-lg font-semibold text-slate-950">Items</h2>
-            <p className="text-sm text-muted-ink">
+      <div className={`grid gap-4 ${ux.sectionDivider}`}>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="grid gap-1">
+            <h2 className="text-base font-semibold text-slate-950">Items</h2>
+            <p className="max-w-prose text-sm text-muted-ink">
               Item order follows the order shown here. Section is optional.
             </p>
           </div>
@@ -179,16 +181,15 @@ function InspectionTemplateForm({
         </div>
         <FieldError message={fieldError(state, "items")} />
 
-        <div className="space-y-4">
+        <div className="grid gap-4">
           {items.map((item, index) => (
-            <fieldset
-              className="space-y-3 rounded-2xl border border-slate-200 p-4"
-              key={item.key}
-            >
-              <div className="flex items-center justify-between gap-3">
-                <legend className="text-sm font-semibold text-slate-900">
+            <fieldset className={ux.itemWell} key={item.key}>
+              <legend className="sr-only">Item {index + 1}</legend>
+
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/70 pb-4">
+                <span className="text-sm font-semibold text-slate-900">
                   Item {index + 1}
-                </legend>
+                </span>
                 <div className="flex flex-wrap gap-2">
                   <button
                     className={ux.compactButton}
@@ -217,48 +218,57 @@ function InspectionTemplateForm({
                 </div>
               </div>
 
-              <label className="space-y-2" htmlFor={`${formId}-item-name-${item.key}`}>
-                <span className="text-sm font-semibold text-slate-900">Item name</span>
-                <input
-                  className={ux.input}
-                  id={`${formId}-item-name-${item.key}`}
-                  name="itemName"
-                  onChange={(event) => updateItem(index, { name: event.target.value })}
-                  required
-                  value={item.name}
-                />
-                <FieldError message={itemError(state, index, "name")} />
-              </label>
+              <div className="grid gap-4">
+                <label className={ux.formField} htmlFor={`${formId}-item-name-${item.key}`}>
+                  <span className={ux.fieldLabel}>Item name</span>
+                  <input
+                    className={ux.input}
+                    id={`${formId}-item-name-${item.key}`}
+                    name="itemName"
+                    onChange={(event) => updateItem(index, { name: event.target.value })}
+                    required
+                    value={item.name}
+                  />
+                  <FieldError message={itemError(state, index, "name")} />
+                </label>
 
-              <label className="space-y-2" htmlFor={`${formId}-item-description-${item.key}`}>
-                <span className="text-sm font-semibold text-slate-900">Item description</span>
-                <textarea
-                  className={` min-h-20`}
-                  id={`${formId}-item-description-${item.key}`}
-                  name="itemDescription"
-                  onChange={(event) =>
-                    updateItem(index, { description: event.target.value })
-                  }
-                  value={item.description}
-                />
-                <FieldError message={itemError(state, index, "description")} />
-              </label>
+                <label
+                  className={ux.formField}
+                  htmlFor={`${formId}-item-description-${item.key}`}
+                >
+                  <span className={ux.fieldLabel}>Item description</span>
+                  <textarea
+                    className={`${ux.textarea} min-h-20`}
+                    id={`${formId}-item-description-${item.key}`}
+                    name="itemDescription"
+                    onChange={(event) =>
+                      updateItem(index, { description: event.target.value })
+                    }
+                    value={item.description}
+                  />
+                  <FieldError message={itemError(state, index, "description")} />
+                </label>
 
-              <label className="space-y-2" htmlFor={`${formId}-item-section-${item.key}`}>
-                <span className="text-sm font-semibold text-slate-900">
-                  Section name <span className="font-normal text-muted-ink">(optional)</span>
-                </span>
-                <input
-                  className={ux.input}
-                  id={`${formId}-item-section-${item.key}`}
-                  name="itemSectionName"
-                  onChange={(event) =>
-                    updateItem(index, { sectionName: event.target.value })
-                  }
-                  value={item.sectionName}
-                />
-                <FieldError message={itemError(state, index, "sectionName")} />
-              </label>
+                <label className={ux.formField} htmlFor={`${formId}-item-section-${item.key}`}>
+                  <span className={ux.fieldLabel}>
+                    Section name{" "}
+                    <span className="font-normal normal-case tracking-normal text-muted-ink">
+                      (optional)
+                    </span>
+                  </span>
+                  <input
+                    className={ux.input}
+                    id={`${formId}-item-section-${item.key}`}
+                    name="itemSectionName"
+                    onChange={(event) =>
+                      updateItem(index, { sectionName: event.target.value })
+                    }
+                    placeholder="e.g. Restroom fixtures"
+                    value={item.sectionName}
+                  />
+                  <FieldError message={itemError(state, index, "sectionName")} />
+                </label>
+              </div>
             </fieldset>
           ))}
         </div>
@@ -270,13 +280,15 @@ function InspectionTemplateForm({
         </p>
       ) : null}
 
-      <button
-        className={ux.primaryButton}
-        disabled={isPending}
-        type="submit"
-      >
-        {isPending ? pendingLabel : submitLabel}
-      </button>
+      <div className={ux.formFooter}>
+        <button
+          className={ux.primaryButton}
+          disabled={isPending}
+          type="submit"
+        >
+          {isPending ? pendingLabel : submitLabel}
+        </button>
+      </div>
     </form>
   );
 }

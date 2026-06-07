@@ -64,7 +64,7 @@ function FilterSelect({
   value: string | undefined;
 }) {
   return (
-    <label className="space-y-1.5" htmlFor={`inspection-filter-${name}`}>
+    <label className={ux.formField} htmlFor={`inspection-filter-${name}`}>
       <span className={ux.fieldLabel}>{label}</span>
       <select
         className={ux.select}
@@ -183,7 +183,7 @@ export default async function InspectionsPage({ searchParams }: InspectionsPageP
               options={buildings.map((building) => ({ id: building.id, name: building.name }))}
               value={params?.buildingId}
             />
-            <label className="space-y-1.5" htmlFor="inspection-filter-status">
+            <label className={ux.formField} htmlFor="inspection-filter-status">
               <span className={ux.fieldLabel}>Status</span>
               <select
                 className={ux.select}
@@ -196,7 +196,7 @@ export default async function InspectionsPage({ searchParams }: InspectionsPageP
                 <option value="submitted">Submitted</option>
               </select>
             </label>
-            <label className="space-y-1.5" htmlFor="inspection-filter-week">
+            <label className={ux.formField} htmlFor="inspection-filter-week">
               <span className={ux.fieldLabel}>Inspection Week</span>
               <select
                 className={ux.select}
@@ -210,11 +210,11 @@ export default async function InspectionsPage({ searchParams }: InspectionsPageP
                 <option value="this-month">This Month</option>
               </select>
             </label>
-            <div className="flex flex-wrap items-end gap-3">
+            <div className={ux.searchActions}>
               <button className={ux.primaryButton} type="submit">
                 Apply filters
               </button>
-              <Link className={`${ux.textLink} py-2.5`} href="/inspections">
+              <Link className={ux.textLink} href="/inspections">
                 Clear
               </Link>
             </div>

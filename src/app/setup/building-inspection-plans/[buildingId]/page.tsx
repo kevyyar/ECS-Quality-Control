@@ -113,12 +113,15 @@ export default async function BuildingInspectionPlanDetailPage({
               title="No plan entries yet"
             />
           ) : (
-            <ol className="divide-y divide-slate-100 rounded-xl border border-slate-200/80">
+            <ol className="grid gap-3">
               {plan.entries
                 .slice()
                 .sort((first, second) => first.position - second.position)
                 .map((entry) => (
-                  <li className="px-4 py-4" key={entry.id}>
+                  <li
+                    className="rounded-xl border border-slate-200/80 bg-slate-50/60 p-4 sm:p-5"
+                    key={entry.id}
+                  >
                     <div className="font-display font-bold text-slate-950">
                       {entry.position}. {entry.areaName}
                     </div>

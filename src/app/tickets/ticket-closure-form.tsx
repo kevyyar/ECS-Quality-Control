@@ -81,11 +81,11 @@ export function TicketClosureForm({ ticketId }: { ticketId: string }) {
   }
 
   return (
-    <form action={formAction} className="space-y-4">
+    <form action={formAction} className={ux.formStack}>
       <input name="ticketId" type="hidden" value={ticketId} />
       <FieldError message={fieldError(state, "ticketId")} />
 
-      <label className="block space-y-1.5" htmlFor="resolution-note">
+      <label className={ux.formField} htmlFor="resolution-note">
         <span className={ux.fieldLabel}>Resolution note</span>
         <textarea
           className={`${ux.textarea} min-h-28 disabled:cursor-not-allowed disabled:bg-slate-100`}
@@ -99,8 +99,8 @@ export function TicketClosureForm({ ticketId }: { ticketId: string }) {
         <FieldError message={fieldError(state, "resolutionNote")} />
       </label>
 
-      <div className="space-y-3">
-        <label className="block space-y-1.5" htmlFor="after-photos">
+      <div className="grid gap-3">
+        <label className={ux.formField} htmlFor="after-photos">
           <span className={ux.fieldLabel}>After Photos</span>
           <input
             accept="image/jpeg,image/png,image/webp"
@@ -118,10 +118,10 @@ export function TicketClosureForm({ ticketId }: { ticketId: string }) {
         {selectedPhotos.length === 0 ? (
           <p className="text-sm text-muted-ink">No After Photos selected.</p>
         ) : (
-          <ul className="space-y-2" aria-label="Selected After Photos">
+          <ul aria-label="Selected After Photos" className="grid gap-2">
             {selectedPhotos.map((photo) => (
               <li
-                className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 px-4 py-3 text-sm"
+                className="flex items-center justify-between gap-3 rounded-xl border border-slate-200/80 bg-slate-50/60 px-4 py-3 text-sm"
                 key={photo.id}
               >
                 <span className="truncate text-slate-700">{photo.file.name}</span>
@@ -151,13 +151,15 @@ export function TicketClosureForm({ ticketId }: { ticketId: string }) {
         </p>
       ) : null}
 
-      <button
-        className={ux.primaryButton}
-        disabled={isPending || isClosed}
-        type="submit"
-      >
-        {isPending ? "Closing…" : "Close Ticket"}
-      </button>
+      <div className={ux.formFooter}>
+        <button
+          className={ux.primaryButton}
+          disabled={isPending || isClosed}
+          type="submit"
+        >
+          {isPending ? "Closing…" : "Close Ticket"}
+        </button>
+      </div>
     </form>
   );
 }

@@ -10,6 +10,7 @@ import type {
   DraftSubmissionValidation,
   InspectionItemResultStatus,
 } from "@/lib/inspections/drafts/model";
+import { ux } from "@/lib/ux/tokens";
 
 import {
   addOneOffAreaInspectionAction,
@@ -970,26 +971,26 @@ function AddOneOffAreaInspectionForm({
   const hasChoices = activeAreas.length > 0 && activeTemplates.length > 0;
 
   return (
-    <form action={formAction} className="space-y-4 rounded-2xl border border-slate-200 p-5">
+    <form action={formAction} className={ux.itemWell}>
       <input name="inspectionId" type="hidden" value={draftId} />
-      <div>
-        <h2 className="text-xl font-semibold text-slate-950">Add one-off Area Inspection</h2>
-        <p className="mt-1 text-sm text-muted-ink">
+      <div className="grid gap-1">
+        <h2 className="text-base font-semibold text-slate-950">Add one-off Area Inspection</h2>
+        <p className="max-w-prose text-sm text-muted-ink">
           Add an Area Inspection to this Draft only. This does not change the Building Inspection Plan.
         </p>
       </div>
 
       {!hasChoices ? (
-        <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-muted-ink">
+        <p className="rounded-xl border border-dashed border-slate-200/80 bg-white/80 px-4 py-3 text-sm text-muted-ink">
           Active Areas and Inspection Templates are required before one-off Area Inspections can be added.
         </p>
       ) : null}
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <label className="space-y-1 text-sm font-medium text-slate-900">
-          <span>Area</span>
+        <label className={ux.formField}>
+          <span className={ux.fieldLabel}>Area</span>
           <select
-            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-950 focus:border-brand-700 focus:outline-none focus:ring-2 focus:ring-brand-100"
+            className={ux.select}
             defaultValue=""
             disabled={activeAreas.length === 0}
             name="areaId"
@@ -1004,10 +1005,10 @@ function AddOneOffAreaInspectionForm({
           {state.status === "error" ? <FieldError message={state.errors.areaId} /> : null}
         </label>
 
-        <label className="space-y-1 text-sm font-medium text-slate-900">
-          <span>Inspection Template</span>
+        <label className={ux.formField}>
+          <span className={ux.fieldLabel}>Inspection Template</span>
           <select
-            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-950 focus:border-brand-700 focus:outline-none focus:ring-2 focus:ring-brand-100"
+            className={ux.select}
             defaultValue=""
             disabled={activeTemplates.length === 0}
             name="inspectionTemplateId"
@@ -1028,13 +1029,15 @@ function AddOneOffAreaInspectionForm({
       {state.status === "error" ? <FieldError message={state.errors.inspectionId} /> : null}
       <ActionMessage state={state} />
 
-      <button
-        className="rounded-xl bg-brand-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100 disabled:cursor-not-allowed disabled:opacity-60"
-        disabled={isPending || !hasChoices}
-        type="submit"
-      >
-        {isPending ? "Adding…" : "Add one-off Area Inspection"}
-      </button>
+      <div className={ux.formFooter}>
+        <button
+          className={ux.primaryButton}
+          disabled={isPending || !hasChoices}
+          type="submit"
+        >
+          {isPending ? "Adding…" : "Add one-off Area Inspection"}
+        </button>
+      </div>
     </form>
   );
 }
@@ -1067,9 +1070,9 @@ function SubmitDraftInspectionForm({
     submissionReview.validation.ok;
 
   return (
-    <form action={formAction} className="space-y-4 rounded-2xl border border-slate-200 p-4 sm:p-5">
+    <form action={formAction} className={ux.itemWell}>
       <input name="inspectionId" type="hidden" value={draft.id} />
-      <h2 className="text-lg font-semibold text-slate-950 sm:text-xl">Submit draft</h2>
+      <h2 className="text-base font-semibold text-slate-950">Submit draft</h2>
       <SubmissionReviewPanel draft={draft} review={submissionReview} />
       {showSubmitValidationErrors ? (
         <SubmissionValidationSummary validation={state.validation} draft={draft} />
@@ -1078,7 +1081,7 @@ function SubmitDraftInspectionForm({
       {state.status === "success" ? (
         <>
           <ActionMessage state={state} />
-          <Link className="text-sm font-semibold text-brand-700 underline" href="/inspections/drafts">
+          <Link className={ux.textLink} href="/inspections/drafts">
             Back to drafts
           </Link>
         </>
@@ -1087,7 +1090,7 @@ function SubmitDraftInspectionForm({
         <label className="flex items-start gap-2.5 text-sm text-slate-700">
           <input
             checked={skippedAreaSubmissionConfirmed}
-            className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 text-brand-700 focus:ring-brand-100"
+            className={`${ux.checkbox} mt-0.5 shrink-0`}
             name="confirmSkippedPlannedAreas"
             onChange={(event) => setSkippedAreaSubmissionConfirmed(event.target.checked)}
             type="checkbox"
@@ -1095,13 +1098,15 @@ function SubmitDraftInspectionForm({
           <span>Confirm skipped areas and reasons above</span>
         </label>
       ) : null}
-      <button
-        className="w-full rounded-xl bg-brand-700 px-4 py-3 text-sm font-semibold text-white shadow-sm hover:bg-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100 disabled:cursor-not-allowed disabled:opacity-60"
-        disabled={!canSubmit}
-        type="submit"
-      >
-        {isPending ? "Submitting…" : "Submit draft"}
-      </button>
+      <div className={ux.formFooter}>
+        <button
+          className={`${ux.primaryButton} w-full sm:w-auto`}
+          disabled={!canSubmit}
+          type="submit"
+        >
+          {isPending ? "Submitting…" : "Submit draft"}
+        </button>
+      </div>
     </form>
   );
 }
@@ -1113,12 +1118,17 @@ function DiscardDraftInspectionForm({ inspectionId }: { inspectionId: string }) 
   );
 
   return (
-    <form action={formAction} className="space-y-3 rounded-2xl border border-red-200 bg-red-50 p-4 sm:p-5">
+    <form
+      action={formAction}
+      className="grid gap-4 rounded-2xl border border-red-200/80 bg-red-50/80 p-5"
+    >
       <input name="inspectionId" type="hidden" value={inspectionId} />
-      <h2 className="text-lg font-semibold text-red-950 sm:text-xl">Discard Draft</h2>
-      <p className="text-xs text-red-900 sm:text-sm">
-        Deletes this draft and all item results. No reports or tickets are created.
-      </p>
+      <div className="grid gap-1">
+        <h2 className="text-base font-semibold text-red-950">Discard Draft</h2>
+        <p className="max-w-prose text-sm text-red-900">
+          Deletes this draft and all item results. No reports or tickets are created.
+        </p>
+      </div>
       {state.status === "error" ? <FieldError message={state.errors.inspectionId} /> : null}
       <ActionMessage state={state} />
       {state.status === "success" ? (
@@ -1126,13 +1136,15 @@ function DiscardDraftInspectionForm({ inspectionId }: { inspectionId: string }) 
           Back to active Draft Inspections
         </Link>
       ) : null}
-      <button
-        className="w-full rounded-xl bg-red-700 px-4 py-3 text-sm font-semibold text-white shadow-sm hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-100 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
-        disabled={isPending}
-        type="submit"
-      >
-        {isPending ? "Discarding…" : "Discard Draft"}
-      </button>
+      <div className="border-t border-red-200/80 pt-4">
+        <button
+          className="inline-flex items-center justify-center rounded-xl bg-red-700 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-red-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-300 disabled:cursor-not-allowed disabled:opacity-60"
+          disabled={isPending}
+          type="submit"
+        >
+          {isPending ? "Discarding…" : "Discard Draft"}
+        </button>
+      </div>
     </form>
   );
 }
@@ -1144,24 +1156,24 @@ export function DraftInspectionEditor({
   submissionReview,
 }: DraftInspectionEditorProps) {
   return (
-    <div className="space-y-8">
-      <p className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">
+    <div className="grid gap-8">
+      <p className="rounded-xl border border-amber-200/80 bg-amber-50 px-5 py-4 text-sm text-amber-900">
         Draft data is editable work in progress and is not reportable until submitted.
       </p>
 
       <DraftProgressSummary draft={draft} />
 
-      <section className="space-y-4" aria-labelledby="area-inspections-heading">
-        <h2 id="area-inspections-heading" className="text-xl font-semibold text-slate-950">
+      <section aria-labelledby="area-inspections-heading" className="grid gap-4">
+        <h2 className="text-base font-semibold text-slate-950" id="area-inspections-heading">
           Area Inspections
         </h2>
 
         {draft.areaInspections.length === 0 ? (
-          <p className="rounded-2xl border border-slate-200 p-5 text-sm text-muted-ink">
+          <p className="rounded-xl border border-dashed border-slate-200/80 bg-slate-50/60 px-5 py-4 text-sm text-muted-ink">
             No Area Inspections were captured for this Draft.
           </p>
         ) : (
-          <ol className="space-y-4">
+          <ol className="grid gap-4">
             {draft.areaInspections.map((areaInspection) => (
               <AreaInspectionAccordion areaInspection={areaInspection} key={areaInspection.id} />
             ))}
@@ -1175,8 +1187,8 @@ export function DraftInspectionEditor({
         draftId={draft.id}
       />
 
-      <section aria-labelledby="draft-actions-heading" className="space-y-3">
-        <h2 className="text-lg font-semibold text-slate-950 sm:text-xl" id="draft-actions-heading">
+      <section aria-labelledby="draft-actions-heading" className="grid gap-4">
+        <h2 className="text-base font-semibold text-slate-950" id="draft-actions-heading">
           Finish draft
         </h2>
         <SubmitDraftInspectionForm draft={draft} submissionReview={submissionReview} />

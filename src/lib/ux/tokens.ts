@@ -7,6 +7,13 @@ export const ux = {
     "w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-950 shadow-sm transition focus:border-brand-forest-600 focus:outline-none focus:ring-2 focus:ring-brand-emerald-100",
   formPanel:
     "space-y-4 rounded-2xl border border-slate-200/80 bg-white/90 p-5 shadow-sm backdrop-blur-sm sm:p-6",
+  formStack: "grid gap-5",
+  formField: "block space-y-1.5",
+  formFooter: "border-t border-slate-200/80 pt-5",
+  itemWell: "grid gap-4 rounded-2xl border border-slate-200/80 bg-slate-50/60 p-5",
+  searchForm: "grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end",
+  searchActions: "flex flex-wrap items-center gap-3",
+  sectionDivider: "border-t border-slate-200/80 pt-6",
   filterPanel:
     "rounded-2xl border border-slate-200/80 bg-white/90 p-5 shadow-sm backdrop-blur-sm sm:p-6",
   primaryButton:
