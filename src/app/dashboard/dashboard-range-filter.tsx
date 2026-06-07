@@ -137,7 +137,7 @@ export function DashboardRangeFilter({
         })}
       </div>
 
-      <form className="grid gap-3 sm:grid-cols-3" onSubmit={onCustomSubmit}>
+      <form className="grid gap-3 sm:grid-cols-3 sm:items-end" onSubmit={onCustomSubmit}>
         <label className={ux.formField} htmlFor="dashboard-start-date">
           <span className={ux.fieldLabel}>Start date</span>
           <div className="relative">
@@ -176,7 +176,7 @@ export function DashboardRangeFilter({
             <ArrowIcon className="size-3.5" />
           </button>
           <button
-            className="inline-flex h-[42px] items-center text-sm font-semibold text-brand-forest-700 transition hover:text-brand-forest-900 disabled:cursor-wait"
+            className={`${ux.textLink} disabled:cursor-wait`}
             disabled={isPending}
             onClick={onReset}
             type="button"
