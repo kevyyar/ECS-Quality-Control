@@ -13,6 +13,7 @@ import {
   PageSection,
   SetupNavCard,
 } from "@/lib/ux/app-page";
+import { setupNavItems } from "@/lib/ux/setup-nav-items";
 import { Glyph } from "@/lib/ux/glyph";
 import { ux } from "@/lib/ux/tokens";
 
@@ -134,41 +135,14 @@ export default async function SetupPage({ searchParams }: SetupPageProps) {
 
         <PageSection heading="Setup areas" headingId="setup-areas-heading" icon="settings">
           <div className="grid gap-4">
-            <SetupNavCard
-              description="Create, edit, archive, and restore service customers."
-              href="/setup/clients"
-              title="Clients"
-            />
-            <SetupNavCard
-              description="Manage service locations under active Clients."
-              href="/setup/buildings"
-              title="Buildings"
-            />
-            <SetupNavCard
-              description="Manage reusable Area categories used to organize Areas."
-              href="/setup/area-types"
-              title="Area Types"
-            />
-            <SetupNavCard
-              description="Manage inspectable spaces under active Buildings."
-              href="/setup/areas"
-              title="Areas"
-            />
-            <SetupNavCard
-              description="Manage reusable inspection checklists and starter templates."
-              href="/setup/inspection-templates"
-              title="Inspection Templates"
-            />
-            <SetupNavCard
-              description="Assign active Areas and Inspection Templates used when starting future Draft Inspections."
-              href="/setup/building-inspection-plans"
-              title="Building Inspection Plans"
-            />
-            <SetupNavCard
-              description="Configure the shared identity used by the app and future PDF reports."
-              href="/company-branding"
-              title="Company Branding"
-            />
+            {setupNavItems.map((item) => (
+              <SetupNavCard
+                description={item.description}
+                href={item.href}
+                key={item.href}
+                title={item.title}
+              />
+            ))}
           </div>
         </PageSection>
 

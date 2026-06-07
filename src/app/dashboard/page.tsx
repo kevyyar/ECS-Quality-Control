@@ -19,6 +19,7 @@ import { DashboardMetrics } from "./dashboard-metrics";
 import { DashboardMetricsSkeleton } from "./dashboard-metrics-skeleton";
 import { DashboardRangeFilter } from "./dashboard-range-filter";
 import { DashboardRangeSubtitle } from "./dashboard-range-subtitle";
+import { DashboardWorkspaceNav } from "./dashboard-workspace-nav";
 
 type DashboardPageProps = {
   searchParams?: Promise<{
@@ -50,6 +51,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     user.capabilities,
     "editDraftInspection",
   );
+  const canManageSetup = canPerformProtectedAction(user.capabilities, "manageSetup");
+  const canManageUsers = canPerformProtectedAction(user.capabilities, "manageUsers");
 
   return (
     <AppPage>
@@ -98,6 +101,12 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       />
 
       <AppPageBody overlap="dashboard">
+        <DashboardWorkspaceNav
+          canManageSetup={canManageSetup}
+          canManageUsers={canManageUsers}
+          canViewActiveDraftMetadata={canViewActiveDraftMetadata}
+        />
+
         <PageSection
           description="Metrics use Submitted Inspections and their Tickets only. Draft Inspection data is excluded."
           heading="Reporting window"
